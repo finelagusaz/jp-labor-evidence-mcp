@@ -1,0 +1,46 @@
+{
+  "name": "labor-law-mcp",
+  "version": "0.2.0",
+  "description": "MCP server for Japanese labor & social insurance law — e-Gov API, MHLW 通達, JAISH 安衛通達",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "labor-law-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kentaroajisaka/labor-law-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "labor",
+    "japan",
+    "law",
+    "e-gov",
+    "mhlw",
+    "sharoushi",
+    "claude"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  }
+}
