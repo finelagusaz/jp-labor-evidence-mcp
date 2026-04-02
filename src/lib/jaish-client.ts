@@ -1,19 +1,10 @@
 /**
  * 安全衛生情報センター（JAISH）HTTP クライアント
  * https://www.jaish.gr.jp/
- *
- * Shift-JIS エンコーディング。年度別インデックスページをクロールし、
- * クライアントサイドでキーワードフィルタを行う。
  */
 
-import { jaishIndexCache, jaishPageCache } from './cache.js';
 import { ValidationError } from './errors.js';
-
-const BASE_URL = 'https://www.jaish.gr.jp';
-const REQUEST_DELAY_MS = 300;
-const MAX_CACHEABLE_HTML_CHARS = 500_000;
-
-let lastRequestTime = 0;
+import { jaishSourceAdapter } from './source-adapters/jaish-source-adapter.js';
 
 /**
  * 年度別インデックスページのパス一覧（新しい順）
@@ -45,38 +36,6 @@ export const JAISH_INDEX_PAGES = [
   '/user/anzen/hor/tsutatsu_h15.html',    // 平成15年
 ];
 
-async function throttledFetch(url: string): Promise<ArrayBuffer> {
-  const now = Date.now();
-  const elapsed = now - lastRequestTime;
-  if (elapsed < REQUEST_DELAY_MS) {
-    await new Promise((r) => setTimeout(r, REQUEST_DELAY_MS - elapsed));
-  }
-  lastRequestTime = Date.now();
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'labor-law-mcp/0.2.0 (MCP server for Japanese labor law)',
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} ${res.statusText} — ${url}`);
-    }
-    return await res.arrayBuffer();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function decodeShiftJIS(buf: ArrayBuffer): string {
-  const decoder = new TextDecoder('shift_jis');
-  return decoder.decode(buf);
-}
-
 /**
  * インデックスページを取得する（24hキャッシュ）
  */
@@ -84,17 +43,7 @@ export async function fetchJaishIndex(path: string): Promise<string> {
   if (!JAISH_INDEX_PAGES.includes(path)) {
     throw new ValidationError(`不正なJAISH年度インデックスです: ${path}`);
   }
-
-  const cached = jaishIndexCache.get(path);
-  if (cached) return cached;
-
-  const url = `${BASE_URL}${path}`;
-  const buf = await throttledFetch(url);
-  const html = decodeShiftJIS(buf);
-  if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
-    jaishIndexCache.set(path, html);
-  }
-  return html;
+  return await jaishSourceAdapter.fetchIndexHtml(path);
 }
 
 /** JAISH配下の許可パスプレフィックス */
@@ -124,17 +73,7 @@ export function validateJaishPath(input: string): string {
  */
 export async function fetchJaishPage(path: string): Promise<string> {
   const safePath = validateJaishPath(path);
-
-  const cached = jaishPageCache.get(safePath);
-  if (cached) return cached;
-
-  const url = `${BASE_URL}${safePath}`;
-  const buf = await throttledFetch(url);
-  const html = decodeShiftJIS(buf);
-  if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
-    jaishPageCache.set(safePath, html);
-  }
-  return html;
+  return await jaishSourceAdapter.fetchPageHtml(safePath);
 }
 
 /**
@@ -142,5 +81,5 @@ export async function fetchJaishPage(path: string): Promise<string> {
  */
 export function getJaishUrl(path: string): string {
   const safePath = validateJaishPath(path);
-  return `${BASE_URL}${safePath}`;
+  return `https://www.jaish.gr.jp${safePath}`;
 }
