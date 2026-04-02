@@ -2,7 +2,7 @@ import { jaishIndexRawCache, jaishPageRawCache } from '../cache.js';
 import { HttpSourceAdapter } from './http-source-adapter.js';
 
 const BASE_URL = 'https://www.jaish.gr.jp';
-const USER_AGENT = 'jp-labor-evidence-mcp/0.2.0 (MCP server for Japanese labor evidence)';
+const USER_AGENT = 'jp-labor-evidence-mcp/0.2.1 (MCP server for Japanese labor evidence)';
 const MAX_CACHEABLE_HTML_CHARS = 500_000;
 
 class JaishSourceAdapter extends HttpSourceAdapter {

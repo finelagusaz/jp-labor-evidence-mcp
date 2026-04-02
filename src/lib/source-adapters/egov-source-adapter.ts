@@ -3,7 +3,7 @@ import type { EgovLawData, EgovLawSearchResult } from '../types.js';
 import { HttpSourceAdapter } from './http-source-adapter.js';
 
 const EGOV_API_BASE = 'https://laws.e-gov.go.jp/api/2';
-const USER_AGENT = 'jp-labor-evidence-mcp/0.2.0 (MCP server for Japanese labor evidence)';
+const USER_AGENT = 'jp-labor-evidence-mcp/0.2.1 (MCP server for Japanese labor evidence)';
 const MAX_CACHEABLE_JSON_CHARS = 500_000;
 
 class EgovSourceAdapter extends HttpSourceAdapter {
