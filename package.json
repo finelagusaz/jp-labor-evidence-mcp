@@ -1,7 +1,7 @@
 {
   "name": "jp-labor-evidence-mcp",
   "version": "0.2.0",
-  "description": "MCP server for Japanese labor & social insurance law — e-Gov API, MHLW 通達, JAISH 安衛通達",
+  "description": "MCP server for Japanese labor and social insurance primary-source evidence",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -17,14 +17,23 @@
     "sync:indexes": "tsx scripts/sync-indexes.ts",
     "sync:indexes:full": "tsx scripts/sync-full-indexes.ts",
     "sync:indexes:incremental": "tsx scripts/sync-incremental-indexes.ts",
+    "pack:dry-run": "npm pack --dry-run --cache ./.npm-pack-cache",
+    "release:check": "npm test && npm run build && npm run pack:dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run release:check"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/finelagusaz/jp-labor-evidence-mcp"
+  },
+  "homepage": "https://github.com/finelagusaz/jp-labor-evidence-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/finelagusaz/jp-labor-evidence-mcp/issues"
   },
   "keywords": [
     "mcp",

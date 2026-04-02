@@ -218,6 +218,20 @@ npm run sync:indexes:incremental
 - `incremental` は change detector に基づいて差分同期を試みる
 - baseline 不足や `unknown` 多発時は安全側に倒して full sync を実行する
 
+## npm 公開前チェック
+
+```bash
+npm run release:check
+```
+
+このチェックは以下を順に実行します。
+
+- `npm test`
+- `npm run build`
+- `npm pack --dry-run --cache ./.npm-pack-cache`
+
+公開時は npm 側で package 名の空き確認、`npm login`、必要なら 2FA / access token の準備が別途必要です。
+
 ## 使い方の例
 
 ### 法令条文
