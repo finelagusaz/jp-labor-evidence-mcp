@@ -50,6 +50,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
         const page = result.page;
         const retrievedAt = isoNow();
         const sourceUrl = 'https://www.mhlw.go.jp/hourei/';
+        const indexLine = `検索経路: ${result.usedIndex ? 'internal_index' : 'upstream_fallback'}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
         const envelope = {
           status: result.status,
           error_code: result.status === 'unavailable' ? 'upstream_unavailable' as const : undefined,
@@ -83,7 +84,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
           return createToolResult(
             'search_mhlw_tsutatsu',
             envelope,
-            `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: unavailable\n検索結果の取得に失敗しました。\n\n失敗箇所:\n${failureLines.join('\n')}`,
+            `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: unavailable\n${indexLine}\n検索結果の取得に失敗しました。\n\n失敗箇所:\n${failureLines.join('\n')}`,
             startedAt,
           );
         }
@@ -100,7 +101,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
               error_code: 'not_found' as const,
               retryable: false,
             },
-            `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: not_found\n0件（${result.page + 1}ページ目）\nキーワードを変えて再検索してください（例: 類義語・上位概念・正式名称を試す）。\n安全衛生関連の場合は search_jaish_tsutatsu も試してください。${warningSection}`,
+            `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: not_found\n${indexLine}\n0件（${result.page + 1}ページ目）\nキーワードを変えて再検索してください（例: 類義語・上位概念・正式名称を試す）。\n安全衛生関連の場合は search_jaish_tsutatsu も試してください。${warningSection}`,
             startedAt,
           );
         }
@@ -116,7 +117,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
         return createToolResult(
           'search_mhlw_tsutatsu',
           envelope,
-          `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: ${result.status}\n該当件数: ${result.totalCount}件（${result.page + 1}ページ目）\n\n${lines.join('\n\n')}${warningSection}\n\n---\n※ 本文を読むには get_mhlw_tsutatsu で data_id を指定してください。\n出典：厚生労働省 法令等データベース`,
+          `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: ${result.status}\n${indexLine}\n該当件数: ${result.totalCount}件（${result.page + 1}ページ目）\n\n${lines.join('\n\n')}${warningSection}\n\n---\n※ 本文を読むには get_mhlw_tsutatsu で data_id を指定してください。\n出典：厚生労働省 法令等データベース`,
           startedAt,
         );
       } catch (error) {

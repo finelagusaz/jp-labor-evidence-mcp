@@ -53,6 +53,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
         });
         const retrievedAt = isoNow();
         const sourceUrl = 'https://www.jaish.gr.jp/';
+        const indexLine = `検索経路: ${result.usedIndex ? 'internal_index' : 'upstream_fallback'}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
         const envelope = {
           status: result.status,
           error_code: result.status === 'unavailable' ? 'upstream_unavailable' as const : undefined,
@@ -86,7 +87,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
           return createToolResult(
             'search_jaish_tsutatsu',
             envelope,
-            `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: unavailable\n検索対象の年度インデックス取得に失敗しました。\n\n失敗ページ:\n${failureLines.join('\n')}\n\n---\n厚労省通達は search_mhlw_tsutatsu で検索できます。`,
+            `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: unavailable\n${indexLine}\n検索対象の年度インデックス取得に失敗しました。\n\n失敗ページ:\n${failureLines.join('\n')}\n\n---\n厚労省通達は search_mhlw_tsutatsu で検索できます。`,
             startedAt,
           );
         }
@@ -111,7 +112,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
               error_code: result.status === 'partial' ? undefined : 'not_found' as const,
               retryable: result.status === 'partial',
             },
-            `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: ${result.status === 'partial' ? 'partial' : 'not_found'}\n0件（${result.pagesSearched}年度分を検索）\nmax_pages を増やすと検索範囲が広がります。キーワードを変えて再検索も試してください。${warningSection}${failureSection}\n\n---\n厚労省通達は search_mhlw_tsutatsu で検索できます。`,
+            `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: ${result.status === 'partial' ? 'partial' : 'not_found'}\n${indexLine}\n0件（${result.pagesSearched}年度分を検索）\nmax_pages を増やすと検索範囲が広がります。キーワードを変えて再検索も試してください。${warningSection}${failureSection}\n\n---\n厚労省通達は search_mhlw_tsutatsu で検索できます。`,
             startedAt,
           );
         }
@@ -119,7 +120,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
         return createToolResult(
           'search_jaish_tsutatsu',
           envelope,
-          `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: ${result.status}\n${result.results.length}件（${result.pagesSearched}年度分を検索）\n\n${lines.join('\n\n')}${warningSection}${failureSection}\n\n---\n※ 本文を読むには get_jaish_tsutatsu で url を指定してください。\n出典：安全衛生情報センター（中央労働災害防止協会）`,
+          `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: ${result.status}\n${indexLine}\n${result.results.length}件（${result.pagesSearched}年度分を検索）\n\n${lines.join('\n\n')}${warningSection}${failureSection}\n\n---\n※ 本文を読むには get_jaish_tsutatsu で url を指定してください。\n出典：安全衛生情報センター（中央労働災害防止協会）`,
           startedAt,
         );
       } catch (error) {

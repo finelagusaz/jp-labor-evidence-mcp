@@ -52,6 +52,7 @@ export function registerSearchLawTool(server: McpServer) {
         });
         const retrievedAt = isoNow();
         const sourceUrl = 'https://laws.e-gov.go.jp/';
+        const indexLine = `検索経路: ${result.usedIndex ? 'internal_index' : 'upstream_fallback'}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
         const envelope = {
           status: result.results.length === 0 ? 'not_found' as const : 'ok' as const,
           retryable: false,
@@ -82,7 +83,7 @@ export function registerSearchLawTool(server: McpServer) {
               ...envelope,
               error_code: 'not_found',
             },
-            `"${args.keyword}" に一致する法令が見つかりませんでした。\nキーワードを変えて再検索してください（例: 類義語や略称を試す）。\n条文を取得する前に、search_law で正式名称または law_id を確認してください。`,
+            `"${args.keyword}" に一致する法令が見つかりませんでした。\n${indexLine}\nキーワードを変えて再検索してください（例: 類義語や略称を試す）。\n条文を取得する前に、search_law で正式名称または law_id を確認してください。`,
             startedAt,
           );
         }
@@ -94,7 +95,7 @@ export function registerSearchLawTool(server: McpServer) {
         return createToolResult(
           'search_law',
           envelope,
-          `# 法令検索結果: "${args.keyword}"\n\n${lines.join('\n\n')}\n\n---\n出典：e-Gov法令検索（デジタル庁）`,
+          `# 法令検索結果: "${args.keyword}"\n\n${indexLine}\n\n${lines.join('\n\n')}\n\n---\n出典：e-Gov法令検索（デジタル庁）`,
           startedAt,
         );
       } catch (error) {
