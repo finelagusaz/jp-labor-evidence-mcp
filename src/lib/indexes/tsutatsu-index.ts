@@ -1,6 +1,7 @@
 import { buildJaishIndexEntry, buildMhlwIndexEntry } from './builders.js';
 import { indexMetadataRegistry } from './index-metadata.js';
-import { loadTsutatsuIndexSnapshot, saveTsutatsuIndexSnapshot } from './index-store.js';
+import { loadLastKnownGoodTsutatsuIndexSnapshot, loadTsutatsuIndexSnapshot, restoreCurrentFromLastKnownGood } from './index-store.js';
+import { promoteTsutatsuIndexSnapshot } from './promotion.js';
 import type { SerializedTsutatsuIndex } from './serialization.js';
 import type { IndexSnapshotMeta, TsutatsuIndexEntry } from './types.js';
 import type { JaishIndexEntry, MhlwSearchResult } from '../types.js';
@@ -17,7 +18,11 @@ class TsutatsuIndexRegistry {
       const entry = buildMhlwIndexEntry(result, 'fresh');
       store.set(entry.canonical_id, entry);
     }
-    indexMetadataRegistry.recordSuccess('mhlw', generatedAt, store.size);
+    indexMetadataRegistry.recordSuccess('mhlw', generatedAt, store.size, undefined, {
+      coveredYears: collectCoveredYears(results.map((result) => result.date)),
+      lastSyncScope: 'runtime_search_results',
+      coldStartMinimumScope: 'manual_sync_or_runtime_learning',
+    });
     this.persist('mhlw');
   }
 
@@ -27,7 +32,11 @@ class TsutatsuIndexRegistry {
       const entry = buildJaishIndexEntry(result, 'fresh');
       store.set(entry.canonical_id, entry);
     }
-    indexMetadataRegistry.recordSuccess('jaish', generatedAt, store.size);
+    indexMetadataRegistry.recordSuccess('jaish', generatedAt, store.size, undefined, {
+      coveredYears: collectCoveredYears(results.map((result) => result.date)),
+      lastSyncScope: 'runtime_search_results',
+      coldStartMinimumScope: 'manual_sync_or_runtime_learning',
+    });
     this.persist('jaish');
   }
 
@@ -75,20 +84,40 @@ class TsutatsuIndexRegistry {
   }
 
   loadFromDisk(source: 'mhlw' | 'jaish'): void {
-    const snapshot = loadTsutatsuIndexSnapshot(source);
-    if (!snapshot) {
-      return;
+    try {
+      const snapshot = loadTsutatsuIndexSnapshot(source);
+      if (!snapshot) {
+        return;
+      }
+      const store = this.entries.get(source)!;
+      store.clear();
+      for (const entry of snapshot.entries) {
+        store.set(entry.canonical_id, entry);
+      }
+      indexMetadataRegistry.register(snapshot.meta);
+    } catch (error) {
+      indexMetadataRegistry.recordFailure(source, new Date().toISOString());
+      const snapshot = loadLastKnownGoodTsutatsuIndexSnapshot(source);
+      if (!snapshot) {
+        if (error instanceof Error) {
+          void error;
+        }
+        return;
+      }
+      restoreCurrentFromLastKnownGood(source);
+      const store = this.entries.get(source)!;
+      store.clear();
+      for (const entry of snapshot.entries) {
+        store.set(entry.canonical_id, entry);
+      }
+      indexMetadataRegistry.register(snapshot.meta);
+      indexMetadataRegistry.recordRollback(source, new Date().toISOString(), snapshot.meta.snapshot_id);
     }
-    const store = this.entries.get(source)!;
-    store.clear();
-    for (const entry of snapshot.entries) {
-      store.set(entry.canonical_id, entry);
-    }
-    indexMetadataRegistry.register(snapshot.meta);
   }
 
   persist(source: 'mhlw' | 'jaish'): void {
-    saveTsutatsuIndexSnapshot(source, this.getSnapshot(source));
+    const promoted = promoteTsutatsuIndexSnapshot(source, this.getSnapshot(source));
+    indexMetadataRegistry.register(promoted.meta);
   }
 
   reset(): void {
@@ -98,3 +127,17 @@ class TsutatsuIndexRegistry {
 }
 
 export const tsutatsuIndexRegistry = new TsutatsuIndexRegistry();
+
+function collectCoveredYears(values: Array<string | undefined>): number[] {
+  return Array.from(new Set(
+    values
+      .map((value) => {
+        if (!value) {
+          return undefined;
+        }
+        const match = value.match(/(19|20)\d{2}/);
+        return match ? Number(match[0]) : undefined;
+      })
+      .filter((value): value is number => value !== undefined)
+  )).sort((a, b) => a - b);
+}

@@ -1,7 +1,8 @@
 import { LAW_ALIAS_MAP, LAW_ID_MAP, type LawRegistryCandidate, isEgovLawId, resolveLawNameStrict, getKnownLawCandidateById } from '../law-registry.js';
 import { buildLawIndexEntry } from './builders.js';
 import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
-import { loadLawIndexSnapshot, saveLawIndexSnapshot } from './index-store.js';
+import { loadLastKnownGoodLawIndexSnapshot, loadLawIndexSnapshot, restoreCurrentFromLastKnownGood } from './index-store.js';
+import { promoteLawIndexSnapshot } from './promotion.js';
 import type { SerializedLawIndex } from './serialization.js';
 import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
 
@@ -50,6 +51,10 @@ const DEFAULT_EGOV_INDEX_META: IndexSnapshotMeta = {
   freshness: inferFreshness(GENERATED_AT),
   entry_count: DEFAULT_LAW_INDEX_ENTRIES.length,
   coverage_ratio: 1,
+  covered_years: [],
+  query_hit_rate: 0,
+  last_sync_scope: 'bundled_registry',
+  cold_start_minimum_scope: 'bundled_registry',
 };
 
 let lawIndexEntries: LawIndexEntry[] = DEFAULT_LAW_INDEX_ENTRIES;
@@ -59,6 +64,10 @@ indexMetadataRegistry.register(egovIndexMeta);
 
 export function getEgovIndexMeta(): IndexSnapshotMeta {
   return egovIndexMeta;
+}
+
+export function getBundledEgovIndexMeta(): IndexSnapshotMeta {
+  return DEFAULT_EGOV_INDEX_META;
 }
 
 export function getEgovIndexEntries(): LawIndexEntry[] {
@@ -73,25 +82,47 @@ export function getEgovIndexSnapshot(): SerializedLawIndex {
 }
 
 export function initializeEgovIndex(): void {
-  const persisted = loadLawIndexSnapshot('egov');
-  if (persisted) {
-    lawIndexEntries = persisted.entries;
-    egovIndexMeta = persisted.meta;
-    indexMetadataRegistry.register(egovIndexMeta);
-    return;
+  try {
+    const persisted = loadLawIndexSnapshot('egov');
+    if (persisted) {
+      lawIndexEntries = persisted.entries;
+      egovIndexMeta = persisted.meta;
+      indexMetadataRegistry.register(egovIndexMeta);
+      return;
+    }
+  } catch (error) {
+    indexMetadataRegistry.recordFailure('egov', new Date().toISOString());
+    const lastKnownGood = loadLastKnownGoodLawIndexSnapshot('egov');
+    if (lastKnownGood) {
+      restoreCurrentFromLastKnownGood('egov');
+      lawIndexEntries = lastKnownGood.entries;
+      egovIndexMeta = lastKnownGood.meta;
+      indexMetadataRegistry.register(egovIndexMeta);
+      indexMetadataRegistry.recordRollback('egov', new Date().toISOString(), egovIndexMeta.snapshot_id);
+      return;
+    }
+    if (error instanceof Error) {
+      void error;
+    }
   }
 
   persistEgovIndex();
 }
 
 export function persistEgovIndex(): void {
+  const promoted = promoteLawIndexSnapshot('egov', {
+    meta: {
+      ...egovIndexMeta,
+      entry_count: lawIndexEntries.length,
+      freshness: inferFreshness(egovIndexMeta.generated_at),
+    },
+    entries: lawIndexEntries,
+  });
   egovIndexMeta = {
     ...egovIndexMeta,
-    entry_count: lawIndexEntries.length,
-    freshness: inferFreshness(egovIndexMeta.generated_at),
+    ...promoted.meta,
   };
   indexMetadataRegistry.register(egovIndexMeta);
-  saveLawIndexSnapshot('egov', getEgovIndexSnapshot());
 }
 
 export function resolveLawFromEgovIndex(query: string): {

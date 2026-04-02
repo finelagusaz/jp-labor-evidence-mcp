@@ -6,6 +6,9 @@ export function createLawCitation(lawTitle: string, lawId: string): Citation {
   return {
     label: lawTitle,
     locator: lawId,
+    source_type: 'egov',
+    source_url: `https://laws.e-gov.go.jp/law/${lawId}`,
+    citation_basis: 'index',
   };
 }
 
@@ -47,6 +50,9 @@ export function buildMhlwIndexEntry(result: MhlwSearchResult, freshness: IndexFr
     citations: [{
       label: result.title,
       locator: result.shubetsu,
+      source_type: 'mhlw',
+      source_url: `https://www.mhlw.go.jp/web/t_doc?dataId=${result.dataId}&dataType=1&pageNo=1`,
+      citation_basis: 'index',
     }],
   };
 }
@@ -65,6 +71,9 @@ export function buildJaishIndexEntry(result: JaishIndexEntry, freshness: IndexFr
     citations: [{
       label: result.title,
       locator: result.number,
+      source_type: 'jaish',
+      source_url: result.url.startsWith('http') ? result.url : `https://www.jaish.gr.jp${result.url}`,
+      citation_basis: 'index',
     }],
   };
 }

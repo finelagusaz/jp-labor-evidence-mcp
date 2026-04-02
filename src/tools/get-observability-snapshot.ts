@@ -56,7 +56,16 @@ const outputSchema = createToolEnvelopeSchema(
       freshness: z.enum(['fresh', 'stale', 'unknown']),
       entry_count: z.number(),
       coverage_ratio: z.number().optional(),
+      covered_years: z.array(z.number()).optional(),
+      query_hit_rate: z.number().optional(),
+      last_sync_scope: z.string().optional(),
+      cold_start_minimum_scope: z.string().optional(),
       storage_path: z.string().optional(),
+      snapshot_id: z.string().optional(),
+      active_snapshot_id: z.string().optional(),
+      last_promotion_at: z.string().optional(),
+      last_known_good_at: z.string().optional(),
+      rollback_count: z.number().optional(),
     })),
     partial_failures: z.record(z.string(), z.number()),
   })
@@ -99,7 +108,7 @@ export function registerGetObservabilitySnapshotTool(server: McpServer) {
         `- ${upstream.source}: requests=${upstream.requests}, failure_rate=${upstream.failure_rate}, parse_errors=${upstream.parse_errors}, timeouts=${upstream.timeouts}`
       );
       const indexLines = snapshot.indexes.map((index) =>
-        `- ${index.source}: freshness=${index.freshness}, entries=${index.entry_count}, coverage=${index.coverage_ratio ?? '-'}, path=${index.storage_path ?? '-'}`
+        `- ${index.source}: freshness=${index.freshness}, entries=${index.entry_count}, coverage=${index.coverage_ratio ?? '-'}, covered_years=${index.covered_years?.join(',') ?? '-'}, query_hit_rate=${index.query_hit_rate ?? '-'}, scope=${index.last_sync_scope ?? '-'}, cold_start=${index.cold_start_minimum_scope ?? '-'}, snapshot=${index.snapshot_id ?? '-'}, active=${index.active_snapshot_id ?? '-'}, promoted_at=${index.last_promotion_at ?? '-'}, last_known_good_at=${index.last_known_good_at ?? '-'}, rollback_count=${index.rollback_count ?? 0}, path=${index.storage_path ?? '-'}`
       );
 
       return createToolResult(

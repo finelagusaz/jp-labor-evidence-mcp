@@ -82,6 +82,7 @@ describe('observability', () => {
     expect(result.structuredContent.data?.upstreams[0]?.source).toBe('egov');
     expect(result.structuredContent.data?.indexes[0]?.source).toBe('egov');
     expect(result.structuredContent.data?.indexes[0]?.coverage_ratio).toBeUndefined();
+    expect(result.structuredContent.data?.indexes[0]?.rollback_count).toBe(0);
     expect(result.structuredContent.data?.partial_failures.jaish).toBe(2);
     expect(result.structuredContent.data?.tools[0]?.tool).toBe('resolve_law');
     expect(result.structuredContent.data?.degraded_reasons.some((reason) => reason.source === 'jaish')).toBe(true);
@@ -100,5 +101,27 @@ describe('observability', () => {
 
     expect(snapshot.degraded).toBe(true);
     expect(snapshot.degraded_reasons.some((reason) => reason.code === 'STALE_INDEX' && reason.source === 'mhlw')).toBe(true);
+  });
+
+  it('coverage が低い index を degraded reason に含める', () => {
+    indexMetadataRegistry.register({
+      source: 'jaish',
+      generated_at: '2026-04-02T00:00:00.000Z',
+      last_success_at: '2026-04-02T00:00:00.000Z',
+      freshness: 'fresh',
+      entry_count: 3,
+      coverage_ratio: 0.4,
+      covered_years: [2024],
+      query_hit_rate: 0.25,
+      last_sync_scope: 'runtime_search_results',
+      cold_start_minimum_scope: 'manual_sync_or_runtime_learning',
+    });
+
+    const snapshot = observabilityRegistry.snapshot();
+    const index = snapshot.indexes.find((entry) => entry.source === 'jaish');
+
+    expect(index?.covered_years).toEqual([2024]);
+    expect(index?.query_hit_rate).toBe(0.25);
+    expect(snapshot.degraded_reasons.some((reason) => reason.code === 'INDEX_COVERAGE_LOW' && reason.source === 'jaish')).toBe(true);
   });
 });

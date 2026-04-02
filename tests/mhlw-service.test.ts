@@ -42,6 +42,7 @@ describe('mhlw-tsutatsu-service fixtures', () => {
     expect(result.results).toHaveLength(2);
     expect(result.partialFailures).toHaveLength(0);
     expect(result.warnings).toHaveLength(0);
+    expect(result.route).toBe('upstream_fallback');
   });
 
   it('upstream 失敗時は unavailable を返す', async () => {
@@ -56,6 +57,7 @@ describe('mhlw-tsutatsu-service fixtures', () => {
     expect(result.results).toHaveLength(0);
     expect(result.partialFailures).toHaveLength(1);
     expect(result.warnings[0]?.code).toBe('MHLW_SEARCH_UNAVAILABLE');
+    expect(result.route).toBe('upstream_fallback');
   });
 
   it('既知候補が index にあれば upstream を呼ばずに返す', async () => {
@@ -76,5 +78,26 @@ describe('mhlw-tsutatsu-service fixtures', () => {
     expect(result.usedIndex).toBe(true);
     expect(fetchMhlwSearch).not.toHaveBeenCalled();
     expect(result.indexMeta?.source).toBe('mhlw');
+    expect(result.route).toBe('index_only');
+  });
+
+  it('coverage が低い場合は fallback せず partial を返す', async () => {
+    indexMetadataRegistry.register({
+      source: 'mhlw',
+      generated_at: '2026-04-02T00:00:00.000Z',
+      freshness: 'fresh',
+      entry_count: 2,
+      coverage_ratio: 0.4,
+    });
+
+    const result = await searchMhlwTsutatsu({
+      keyword: '足場',
+      page: 0,
+    });
+
+    expect(result.status).toBe('partial');
+    expect(result.route).toBe('coverage_below_threshold');
+    expect(result.usedIndex).toBe(true);
+    expect(fetchMhlwSearch).not.toHaveBeenCalled();
   });
 });

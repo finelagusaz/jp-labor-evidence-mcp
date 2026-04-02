@@ -257,6 +257,98 @@ describe('getEvidenceBundle', () => {
     expect(result.related_tsutatsu[0]?.relevance_score).toBeGreaterThan(
       result.related_tsutatsu[1]?.relevance_score ?? 0
     );
+    expect(result.related_tsutatsu.map((item) => item.canonical_id)).toEqual([
+      'mhlw:00tb2036',
+      'jaish:/anzen/example-2.htm',
+    ]);
+  });
+
+  it('同一候補が複数キーワードでヒットしても順位が安定する', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '347AC0000000057',
+      lawTitle: '労働安全衛生法',
+      lawNum: '昭和四十七年法律第五十七号',
+      promulgationDate: '1972-06-08',
+      article: '59',
+      articleCaption: '安全衛生教育',
+      text: '事業者は、安全教育及び危険防止のため必要な措置を講ずる。',
+      egovUrl: 'https://laws.e-gov.go.jp/law/347AC0000000057',
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '347AC0000000057',
+      lawTitle: '労働安全衛生法',
+      delegatedLaws: [],
+      searchKeywords: ['安全教育', '危険防止'],
+      warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu)
+      .mockResolvedValueOnce({
+        status: 'ok',
+        results: [{
+          title: '安全教育の実施について',
+          dataId: '00tb3001',
+          date: '2024-03-01',
+          shubetsu: '基発0301第1号',
+        }],
+        totalCount: 1,
+        page: 0,
+        partialFailures: [],
+        warnings: [],
+        route: 'upstream_fallback',
+      })
+      .mockResolvedValueOnce({
+        status: 'ok',
+        results: [{
+          title: '安全教育の実施について',
+          dataId: '00tb3001',
+          date: '2024-03-01',
+          shubetsu: '基発0301第1号',
+        }],
+        totalCount: 1,
+        page: 0,
+        partialFailures: [],
+        warnings: [],
+        route: 'upstream_fallback',
+      });
+    vi.mocked(searchJaishTsutatsu)
+      .mockResolvedValueOnce({
+        status: 'ok',
+        results: [{
+          title: '危険防止措置の参考資料',
+          number: '基安発0301第2号',
+          date: '2024-03-01',
+          url: '/anzen/example-3.htm',
+        }],
+        pagesSearched: 1,
+        failedPages: [],
+        warnings: [],
+        route: 'upstream_fallback',
+      })
+      .mockResolvedValueOnce({
+        status: 'ok',
+        results: [{
+          title: '危険防止措置の参考資料',
+          number: '基安発0301第2号',
+          date: '2024-03-01',
+          url: '/anzen/example-3.htm',
+        }],
+        pagesSearched: 1,
+        failedPages: [],
+        warnings: [],
+        route: 'upstream_fallback',
+      });
+
+    const result = await getEvidenceBundle({
+      lawId: '347AC0000000057',
+      article: '59',
+      relatedKeywords: ['安全教育', '危険防止'],
+    });
+
+    expect(result.related_tsutatsu).toHaveLength(2);
+    expect(result.related_tsutatsu.map((item) => item.canonical_id)).toEqual([
+      'mhlw:00tb3001',
+      'jaish:/anzen/example-3.htm',
+    ]);
   });
 
   it('関連探索が例外でも主条文を返し partial に落とす', async () => {

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
+import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -22,6 +23,7 @@ const searchLawOutputSchema = createToolEnvelopeSchema(
     retrieved_at: z.string(),
     source_url: z.string(),
     used_index: z.boolean(),
+    route: z.enum(['index_only', 'upstream_fallback', 'stale_but_usable', 'coverage_below_threshold']),
     index_freshness: z.enum(['fresh', 'stale', 'unknown']).optional(),
     results: z.array(z.object({
       law_title: z.string(),
@@ -30,6 +32,19 @@ const searchLawOutputSchema = createToolEnvelopeSchema(
       law_num: z.string(),
       law_type: z.string(),
       source_url: z.string(),
+      freshness_status: z.enum(['fresh', 'stale', 'unknown']),
+      citation_basis: z.enum(['index', 'upstream']),
+      indexed_at: z.string().optional(),
+      retrieved_at: z.string().optional(),
+      citations: z.array(z.object({
+        label: z.string(),
+        locator: z.string().optional(),
+        source_type: z.enum(['egov', 'mhlw', 'jaish']).optional(),
+        source_url: z.string().optional(),
+        indexed_at: z.string().optional(),
+        retrieved_at: z.string().optional(),
+        citation_basis: z.enum(['index', 'upstream']).optional(),
+      })),
     })),
   })
 );
@@ -52,11 +67,12 @@ export function registerSearchLawTool(server: McpServer) {
         });
         const retrievedAt = isoNow();
         const sourceUrl = 'https://laws.e-gov.go.jp/';
-        const indexLine = `検索経路: ${result.usedIndex ? 'internal_index' : 'upstream_fallback'}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
+        const candidateBasis: CitationBasis = result.usedIndex ? 'index' : 'upstream';
+        const indexLine = `検索経路: ${result.route}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
         const envelope = {
           status: result.results.length === 0 ? 'not_found' as const : 'ok' as const,
           retryable: false,
-          degraded: false,
+          degraded: result.route !== 'index_only',
           warnings: result.warnings,
           partial_failures: [],
           data: {
@@ -64,6 +80,7 @@ export function registerSearchLawTool(server: McpServer) {
             retrieved_at: retrievedAt,
             source_url: sourceUrl,
             used_index: result.usedIndex,
+            route: result.route,
             index_freshness: result.indexMeta?.freshness,
             results: result.results.map((r) => ({
               law_title: r.lawTitle,
@@ -72,6 +89,19 @@ export function registerSearchLawTool(server: McpServer) {
               law_num: r.lawNum,
               law_type: r.lawType,
               source_url: r.egovUrl,
+              freshness_status: result.indexMeta?.freshness ?? 'unknown',
+              citation_basis: candidateBasis,
+              indexed_at: candidateBasis === 'index' ? result.indexMeta?.generated_at : undefined,
+              retrieved_at: candidateBasis === 'upstream' ? retrievedAt : undefined,
+              citations: [{
+                label: r.lawTitle,
+                locator: r.lawId,
+                source_type: 'egov',
+                source_url: r.egovUrl,
+                indexed_at: candidateBasis === 'index' ? result.indexMeta?.generated_at : undefined,
+                retrieved_at: candidateBasis === 'upstream' ? retrievedAt : undefined,
+                citation_basis: candidateBasis,
+              }],
             })),
           },
         };

@@ -5,11 +5,13 @@
 import { fetchJaishIndex, fetchJaishPage, getJaishUrl, JAISH_INDEX_PAGES } from '../jaish-client.js';
 import { NormalizedCache } from '../cache.js';
 import { tsutatsuIndexRegistry } from '../indexes/tsutatsu-index.js';
+import { indexMetadataRegistry } from '../indexes/index-metadata.js';
 import type { IndexSnapshotMeta } from '../indexes/types.js';
 import { parseJaishIndex, filterJaishEntries, parseJaishDocument } from '../jaish-parser.js';
 import type { JaishIndexEntry, JaishDocument, PartialFailure, WarningMessage } from '../types.js';
 import { ParseError, ValidationError } from '../errors.js';
 import { observabilityRegistry } from '../observability.js';
+import { decideSearchRouting, type SearchRoute } from '../search-routing-policy.js';
 
 export interface JaishSearchResponse {
   status: 'ok' | 'partial' | 'unavailable';
@@ -19,6 +21,7 @@ export interface JaishSearchResponse {
   warnings: WarningMessage[];
   usedIndex: boolean;
   indexMeta?: IndexSnapshotMeta;
+  route: SearchRoute;
 }
 
 const jaishSearchNormalizedCache = new NormalizedCache<JaishSearchResponse>('jaish_search_result', {
@@ -62,6 +65,11 @@ export async function searchJaishTsutatsu(opts: {
   const limit = Math.min(opts.limit ?? 10, 30);
   const maxPages = Math.min(opts.maxPages ?? 5, JAISH_INDEX_PAGES.length);
   const indexHit = tsutatsuIndexRegistry.search('jaish', keyword, limit);
+  indexMetadataRegistry.recordQuery('jaish', indexHit.results.length > 0);
+  const routing = decideSearchRouting({
+    indexHit: indexHit.results.length > 0,
+    indexMeta: indexHit.meta,
+  });
   if (indexHit.results.length > 0) {
     return {
       status: 'ok',
@@ -75,9 +83,10 @@ export async function searchJaishTsutatsu(opts: {
       })),
       pagesSearched: 0,
       failedPages: [],
-      warnings: [],
+      warnings: routing.warnings,
       usedIndex: true,
       indexMeta: indexHit.meta,
+      route: routing.route,
     };
   }
   const cacheKey = `${keyword}|${limit}|${maxPages}`;
@@ -85,11 +94,23 @@ export async function searchJaishTsutatsu(opts: {
   if (cached) {
     return cached;
   }
+  if (!routing.allowUpstreamFallback) {
+    return {
+      status: 'partial',
+      results: [],
+      pagesSearched: 0,
+      failedPages: [],
+      warnings: routing.warnings,
+      usedIndex: true,
+      indexMeta: indexHit.meta,
+      route: routing.route,
+    };
+  }
 
   const allResults: JaishIndexEntry[] = [];
   let pagesSearched = 0;
   const failedPages: PartialFailure[] = [];
-  const warnings: WarningMessage[] = [];
+  const warnings: WarningMessage[] = [...routing.warnings];
 
   for (let i = 0; i < maxPages && allResults.length < limit; i++) {
     const path = JAISH_INDEX_PAGES[i];
@@ -132,6 +153,7 @@ export async function searchJaishTsutatsu(opts: {
     warnings,
     usedIndex: false,
     indexMeta: tsutatsuIndexRegistry.getMeta('jaish'),
+    route: routing.route,
   };
   if (payload.results.length > 0) {
     tsutatsuIndexRegistry.recordJaishResults(payload.results);

@@ -114,6 +114,16 @@ npm run build
 npm run sync:indexes
 ```
 
+明示的に full / incremental を分ける場合:
+
+```bash
+npm run sync:indexes:full
+npm run sync:indexes:incremental
+```
+
+`sync:indexes` は `full sync` の別名です。sync 実行時は lock file により並行実行が拒否され、state は `sync-state.json` に記録されます。
+`incremental` は source ごとの change detector に基づいて差分同期を試みますが、baseline 不足や unknown が多い場合は安全側に倒して full sync を実行します。
+
 保存先は既定で `./.labor-law-indexes` です。`LABOR_LAW_MCP_INDEX_DIR` を指定すると変更できます。
 
 ```json

@@ -45,6 +45,7 @@ describe('jaish-tsutatsu-service fixtures', () => {
     expect(result.results[0]?.title).toContain('足場');
     expect(result.failedPages).toHaveLength(1);
     expect(result.warnings[0]?.code).toBe('JAISH_SEARCH_PARTIAL');
+    expect(result.route).toBe('upstream_fallback');
   });
 
   it('全年度失敗なら unavailable を返す', async () => {
@@ -59,6 +60,7 @@ describe('jaish-tsutatsu-service fixtures', () => {
     expect(result.results).toHaveLength(0);
     expect(result.failedPages).toHaveLength(2);
     expect(result.warnings[0]?.code).toBe('JAISH_SEARCH_UNAVAILABLE');
+    expect(result.route).toBe('upstream_fallback');
   });
 
   it('既知候補が index にあれば upstream を呼ばずに返す', async () => {
@@ -79,5 +81,33 @@ describe('jaish-tsutatsu-service fixtures', () => {
     expect(result.usedIndex).toBe(true);
     expect(fetchJaishIndex).not.toHaveBeenCalled();
     expect(result.indexMeta?.source).toBe('jaish');
+    expect(result.route).toBe('index_only');
+  });
+
+  it('stale index でも既知候補は stale_but_usable で返す', async () => {
+    vi.mocked(fetchJaishIndex).mockResolvedValue(successHtml);
+    await searchJaishTsutatsu({
+      keyword: '足場',
+      maxPages: 2,
+    });
+
+    indexMetadataRegistry.register({
+      source: 'jaish',
+      generated_at: '2026-03-01T00:00:00.000Z',
+      freshness: 'stale',
+      entry_count: 1,
+      coverage_ratio: 1,
+    });
+
+    vi.mocked(fetchJaishIndex).mockClear();
+
+    const result = await searchJaishTsutatsu({
+      keyword: '足場',
+      maxPages: 2,
+    });
+
+    expect(result.route).toBe('stale_but_usable');
+    expect(result.usedIndex).toBe(true);
+    expect(fetchJaishIndex).not.toHaveBeenCalled();
   });
 });

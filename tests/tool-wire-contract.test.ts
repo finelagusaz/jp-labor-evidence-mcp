@@ -44,6 +44,7 @@ describe('tool wire contract', () => {
         entry_count: 45,
       },
       warnings: [],
+      route: 'index_only',
       results: [{
         lawTitle: '労働基準法',
         lawId: '322AC0000000049',
@@ -58,6 +59,11 @@ describe('tool wire contract', () => {
     expect(result.structuredContent.status).toBe('ok');
     expect(result.structuredContent.data?.results[0]?.canonical_id).toBe('egov:322AC0000000049');
     expect(result.structuredContent.data?.used_index).toBe(true);
+    expect(result.structuredContent.data?.route).toBe('index_only');
+    expect(result.structuredContent.data?.results[0]?.citation_basis).toBe('index');
+    expect(result.structuredContent.data?.results[0]?.indexed_at).toBe('2026-04-02T00:00:00.000Z');
+    expect(result.structuredContent.data?.results[0]?.retrieved_at).toBeUndefined();
+    expect(result.structuredContent.data?.results[0]?.citations[0]?.source_type).toBe('egov');
     expect(result.content[0]?.type).toBe('text');
   });
 
@@ -77,6 +83,7 @@ describe('tool wire contract', () => {
         entry_count: 45,
       },
       warnings: [],
+      route: 'index_only',
       results: [],
     });
 
@@ -85,6 +92,40 @@ describe('tool wire contract', () => {
     expect(result.structuredContent.status).toBe('not_found');
     expect(result.structuredContent.error_code).toBe('not_found');
     expect(result.isError).toBe(false);
+  });
+
+  it('search_law は upstream 候補に retrieved_at を付与する', async () => {
+    const registerTool = vi.fn();
+    registerSearchLawTool(createServerStub(registerTool));
+
+    const [, , handler] = registerTool.mock.calls[0];
+    vi.mocked(searchLaw).mockResolvedValue({
+      keyword: '未登録法令',
+      usedIndex: false,
+      indexMeta: {
+        source: 'egov',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 45,
+      },
+      warnings: [],
+      route: 'upstream_fallback',
+      results: [{
+        lawTitle: '未登録法令',
+        lawId: '999AC0000000001',
+        lawNum: '令和八年法律第一号',
+        lawType: 'Act',
+        egovUrl: 'https://laws.e-gov.go.jp/law/999AC0000000001',
+      }],
+    });
+
+    const result = await handler({ keyword: '未登録法令' });
+    const candidate = result.structuredContent.data?.results[0];
+
+    expect(candidate?.citation_basis).toBe('upstream');
+    expect(candidate?.indexed_at).toBeUndefined();
+    expect(candidate?.retrieved_at).toBeDefined();
   });
 
   it('resolve_law は ambiguous を partial として返す', async () => {

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildMhlwDocumentCanonicalId } from '../lib/canonical-id.js';
+import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchMhlwTsutatsu } from '../lib/services/mhlw-tsutatsu-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -21,6 +22,7 @@ const searchMhlwOutputSchema = createToolEnvelopeSchema(
     retrieved_at: z.string(),
     source_url: z.string(),
     used_index: z.boolean(),
+    route: z.enum(['index_only', 'upstream_fallback', 'stale_but_usable', 'coverage_below_threshold']),
     index_freshness: z.enum(['fresh', 'stale', 'unknown']).optional(),
     results: z.array(z.object({
       title: z.string(),
@@ -28,6 +30,19 @@ const searchMhlwOutputSchema = createToolEnvelopeSchema(
       shubetsu: z.string(),
       data_id: z.string(),
       canonical_id: z.string(),
+      freshness_status: z.enum(['fresh', 'stale', 'unknown']),
+      citation_basis: z.enum(['index', 'upstream']),
+      indexed_at: z.string().optional(),
+      retrieved_at: z.string().optional(),
+      citations: z.array(z.object({
+        label: z.string(),
+        locator: z.string().optional(),
+        source_type: z.enum(['egov', 'mhlw', 'jaish']).optional(),
+        source_url: z.string().optional(),
+        indexed_at: z.string().optional(),
+        retrieved_at: z.string().optional(),
+        citation_basis: z.enum(['index', 'upstream']).optional(),
+      })),
     })),
   })
 );
@@ -50,12 +65,13 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
         const page = result.page;
         const retrievedAt = isoNow();
         const sourceUrl = 'https://www.mhlw.go.jp/hourei/';
-        const indexLine = `検索経路: ${result.usedIndex ? 'internal_index' : 'upstream_fallback'}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
+        const candidateBasis: CitationBasis = result.usedIndex ? 'index' : 'upstream';
+        const indexLine = `検索経路: ${result.route}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
         const envelope = {
           status: result.status,
           error_code: result.status === 'unavailable' ? 'upstream_unavailable' as const : undefined,
           retryable: result.status === 'unavailable',
-          degraded: result.status !== 'ok' || result.warnings.length > 0,
+          degraded: result.status !== 'ok' || result.warnings.length > 0 || result.route !== 'index_only',
           warnings: result.warnings,
           partial_failures: result.partialFailures,
           data: {
@@ -65,6 +81,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
             retrieved_at: retrievedAt,
             source_url: sourceUrl,
             used_index: result.usedIndex,
+            route: result.route,
             index_freshness: result.indexMeta?.freshness,
             results: result.results.map((r) => ({
               title: r.title,
@@ -72,6 +89,19 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
               shubetsu: r.shubetsu,
               data_id: r.dataId,
               canonical_id: buildMhlwDocumentCanonicalId(r.dataId),
+              freshness_status: result.indexMeta?.freshness ?? 'unknown',
+              citation_basis: candidateBasis,
+              indexed_at: candidateBasis === 'index' ? result.indexMeta?.generated_at : undefined,
+              retrieved_at: candidateBasis === 'upstream' ? retrievedAt : undefined,
+              citations: [{
+                label: r.title,
+                locator: r.shubetsu,
+                source_type: 'mhlw',
+                source_url: `https://www.mhlw.go.jp/web/t_doc?dataId=${r.dataId}&dataType=1&pageNo=1`,
+                indexed_at: candidateBasis === 'index' ? result.indexMeta?.generated_at : undefined,
+                retrieved_at: candidateBasis === 'upstream' ? retrievedAt : undefined,
+                citation_basis: candidateBasis,
+              }],
             })),
           },
         };

@@ -8,10 +8,12 @@ import { NormalizedCache } from '../cache.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
+import { indexMetadataRegistry } from '../indexes/index-metadata.js';
 import type { IndexSnapshotMeta } from '../indexes/types.js';
 import type { EgovLawSearchResult } from '../types.js';
 import { findDelegatedLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
 import type { WarningMessage } from '../types.js';
+import { decideSearchRouting, type SearchRoute } from '../search-routing-policy.js';
 
 export interface GetLawArticleResult {
   lawId: string;
@@ -47,6 +49,7 @@ export interface SearchLawResult {
   usedIndex: boolean;
   indexMeta?: IndexSnapshotMeta;
   warnings: WarningMessage[];
+  route: SearchRoute;
 }
 
 export interface ResolveLawResult {
@@ -184,6 +187,12 @@ export async function searchLaw(params: {
     return cached;
   }
   const indexResults = searchEgovIndex(params.keyword, params.lawType, limit);
+  const indexMeta = getEgovIndexMeta();
+  indexMetadataRegistry.recordQuery('egov', indexResults.length > 0);
+  const routing = decideSearchRouting({
+    indexHit: indexResults.length > 0,
+    indexMeta,
+  });
   if (indexResults.length > 0) {
     const payload = {
       keyword: params.keyword,
@@ -195,8 +204,22 @@ export async function searchLaw(params: {
         egovUrl: entry.source_url,
       })),
       usedIndex: true,
-      indexMeta: getEgovIndexMeta(),
-      warnings: [],
+      indexMeta,
+      warnings: routing.warnings,
+      route: routing.route,
+    };
+    lawSearchNormalizedCache.set(cacheKey, payload);
+    return payload;
+  }
+
+  if (!routing.allowUpstreamFallback) {
+    const payload = {
+      keyword: params.keyword,
+      results: [],
+      usedIndex: true,
+      indexMeta,
+      warnings: routing.warnings,
+      route: routing.route,
     };
     lawSearchNormalizedCache.set(cacheKey, payload);
     return payload;
@@ -214,11 +237,9 @@ export async function searchLaw(params: {
       egovUrl: getEgovUrl(r.law_info.law_id),
     })),
     usedIndex: false,
-    indexMeta: getEgovIndexMeta(),
-    warnings: [{
-      code: 'UPSTREAM_SEARCH_FALLBACK',
-      message: '内部 e-Gov 索引で候補が見つからなかったため、upstream 検索へフォールバックしました。',
-    }],
+    indexMeta,
+    warnings: routing.warnings,
+    route: routing.route,
   };
   lawSearchNormalizedCache.set(cacheKey, payload);
   return payload;

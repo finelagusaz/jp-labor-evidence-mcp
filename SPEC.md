@@ -157,13 +157,15 @@
 - Phase 1.5: 完了
 - Phase 2: 完了
 - Phase 3: 完了
-- Phase 4: 未着手
+- Phase 4: 前半完了 / 後半未完
 
 補足:
 
 - Phase 3 の `diff_revision` は「同一法令の改正前後比較」に限定する
 - `get_evidence_bundle` は主条文取得を必須成功条件とし、関連探索失敗は `partial_failures` に落とす
 - `find_related_sources` における委任先未登録は `warning` であり、runtime degradation ではない
+- Phase 4 前半として、raw/normalized cache 分離、index schema、e-Gov/MHLW/JAISH index 内部化、freshness metadata、index 永続化、起動時 load、`sync:indexes` の手動導線、index observability は実装済み
+- Phase 4 後半の主残件は、snapshot 昇格/rollback、定期同期、差分再取り込み、routing policy、coverage 定義、freshness/citation の監査強化、検索品質回帰テストである
 
 ### Phase 0: 緊急安定化
 
@@ -997,6 +999,276 @@ Phase 4 は、以下の 5 本のワークストリームに分けて進める。
 3. freshness が snapshot から読めること
 4. stale index が degraded 判定に反映されること
 5. raw cache と normalized cache の責務が分離されていること
+
+### 14.2 Phase 4 後半の分解
+
+Phase 4 後半は、前半で入れた内部 index を「壊さず運用できること」と「検索品質を説明可能にすること」を目的に、以下の 8 本のワークストリームへ分ける。
+
+1. snapshot 昇格フロー
+2. last-known-good 運用
+3. 同期ジョブ基盤
+4. Search Routing Policy の固定
+5. Coverage 定義と observability 拡張
+6. Freshness / Citation の監査強化
+7. 更新検知と差分再取り込み
+8. 検索品質回帰テストと障害演習
+
+着手順は以下とする。
+
+1. snapshot 昇格フロー
+2. last-known-good 運用
+3. 同期ジョブ基盤
+4. Search Routing Policy の固定
+5. Coverage 定義と observability 拡張
+6. Freshness / Citation の監査強化
+7. 更新検知と差分再取り込み
+8. 検索品質回帰テストと障害演習
+
+理由:
+
+- まず「壊れた index を採用しない」を固めないと、定期同期や差分同期を足した時に事故面積が広がる
+- routing policy を先に定義しないと、coverage や freshness の意味が source ごとにぶれる
+- 更新検知は最後でよく、promote / rollback / stale-but-usable の安全装置を先に入れる方が堅い
+
+#### 14.2.1 ワークストリーム F: snapshot 昇格フロー
+
+目的:
+同期で生成した snapshot を、そのまま current に採用せず、検証と昇格の段階を明示する。
+
+対象ファイル:
+
+- `src/lib/indexes/index-store.ts`
+- `src/lib/indexes/bootstrap.ts`
+- 新規 `src/lib/indexes/promotion.ts`
+- `scripts/sync-indexes.ts`
+
+作業:
+
+1. `build -> validate -> stage -> promote` の段階を標準化する
+2. temp file へ書き出し、`fsync` 後に atomic rename で current を更新する
+3. `entry_count` 急減、schema mismatch、parse error 率超過では promote を拒否する
+4. `active_snapshot_id` と `last_promotion_at` を metadata へ保持する
+
+受け入れ条件:
+
+- 破損 snapshot や明らかな coverage 急減 snapshot は current へ昇格しない
+- promote 済み snapshot と stage 中 snapshot を運用上区別できる
+
+テスト観点:
+
+- validation failure で promote しない
+- atomic promote 後のみ current が切り替わる
+- schema mismatch の拒否
+
+#### 14.2.2 ワークストリーム G: last-known-good 運用
+
+目的:
+同期失敗時や validation failure 時に、前回正常 snapshot で検索継続できるようにする。
+
+対象ファイル:
+
+- `src/lib/indexes/index-store.ts`
+- `src/lib/indexes/index-metadata.ts`
+- `src/lib/indexes/bootstrap.ts`
+- `src/tools/get-observability-snapshot.ts`
+
+作業:
+
+1. `current` と `last_known_good` を明示的に分ける
+2. 読み込み失敗、validation failure、coverage 急減時は `last_known_good` を維持する
+3. `partial success` snapshot は保存しても promote しない
+4. `rollback_count`, `last_known_good_at`, `active_snapshot_id` を observability に出す
+
+受け入れ条件:
+
+- current 読み込み失敗時でも `last_known_good` で起動できる
+- partial success snapshot が current を上書きしない
+
+テスト観点:
+
+- broken current snapshot からの fallback load
+- rollback metadata 露出
+- partial success 非昇格
+
+#### 14.2.3 ワークストリーム H: 同期ジョブ基盤
+
+目的:
+手動同期と定期同期の責務を分け、運用可能なジョブ境界を定義する。
+
+対象ファイル:
+
+- `scripts/sync-indexes.ts`
+- 新規 `scripts/sync-full-indexes.ts`
+- 新規 `scripts/sync-incremental-indexes.ts`
+- 新規 `src/lib/indexes/sync-runner.ts`
+
+作業:
+
+1. `full sync` と `incremental sync` を分離する
+2. ジョブ状態を `pending/running/succeeded/failed/promoted` で管理する
+3. lock file で並行実行を禁止する
+4. source ごとの timeout、retry、backoff を定義する
+
+受け入れ条件:
+
+- 同時に 2 本の sync が走らない
+- full sync と incremental sync の責務がコードと運用文書で分離される
+
+テスト観点:
+
+- lock file による並行実行拒否
+- retry / timeout の挙動
+- job state 遷移
+
+#### 14.2.4 ワークストリーム I: Search Routing Policy の固定
+
+目的:
+`index-only` と `upstream_fallback` の境界を source 共通ポリシーとして固定する。
+
+対象ファイル:
+
+- `src/lib/services/law-service.ts`
+- `src/lib/services/mhlw-tsutatsu-service.ts`
+- `src/lib/services/jaish-tsutatsu-service.ts`
+- 新規 `src/lib/search-routing-policy.ts`
+- `src/tools/search-*.ts`
+
+作業:
+
+1. `index_hit`, `index_miss`, `stale_index`, `coverage_below_threshold`, `force_refresh` ごとの routing table を定義する
+2. `index-only` で返す条件と fallback を許す条件を明文化する
+3. fallback 時の `status`, `degraded`, `used_index`, `route` を source 共通で揃える
+4. `low coverage` では fallback せず degraded warning だけを返す条件を定義する
+
+受け入れ条件:
+
+- どの条件で upstream を叩くかをレスポンスから説明できる
+- source ごとに route 判定がばらつかない
+
+テスト観点:
+
+- index-only route
+- upstream fallback route
+- stale but usable route
+- coverage below threshold route
+
+#### 14.2.5 ワークストリーム J: Coverage 定義と observability 拡張
+
+目的:
+`coverage` を件数ではなく、「何がどこまで埋まっているか」を読める指標へ分解する。
+
+対象ファイル:
+
+- `src/lib/indexes/index-metadata.ts`
+- `src/lib/observability.ts`
+- `src/tools/get-observability-snapshot.ts`
+
+作業:
+
+1. `coverage_ratio` の母集団を source ごとに定義する
+2. `covered_years`, `query_hit_rate`, `last_sync_scope`, `cold_start_minimum_scope` を追加する
+3. `coverage_drop` を degraded 判定の入力指標にする
+4. `entry_count` 単独では coverage を語らないように文言を整理する
+
+受け入れ条件:
+
+- `get_observability_snapshot` だけで、source ごとの coverage 状況と最低保証範囲が読める
+- `coverage=0.8` の意味を source ごとに説明できる
+
+テスト観点:
+
+- coverage metadata serialization
+- coverage drop detection
+- query hit rate 集計
+
+#### 14.2.6 ワークストリーム K: Freshness / Citation の監査強化
+
+目的:
+index 由来候補でも、出典と鮮度の意味を失わず監査可能にする。
+
+対象ファイル:
+
+- `src/lib/indexes/types.ts`
+- `src/lib/indexes/builders.ts`
+- `src/lib/tool-contract.ts`
+- 各 `search_*` tool
+
+作業:
+
+1. `fresh | stale | unknown` の判定基準と source 別 TTL を固定する
+2. citation に `title`, `source_type`, `locator`, `citation_basis`, `indexed_at` を追加する
+3. index 由来候補と upstream 直取得候補をレスポンス上で区別する
+4. 検索結果に `indexed_at` または `retrieved_at` のどちらを持つかを明示する
+
+受け入れ条件:
+
+- index 由来か upstream 直取得かを機械可読で区別できる
+- freshness が単なる timestamp ではなく、判定済み status として返る
+
+テスト観点:
+
+- citation basis の付与
+- freshness status の source 別判定
+- indexed_at / retrieved_at の排他性
+
+#### 14.2.7 ワークストリーム L: 更新検知と差分再取り込み
+
+目的:
+full rebuild 前提をやめ、source ごとの更新単位で差分同期できるようにする。
+
+対象ファイル:
+
+- 新規 `src/lib/indexes/change-detectors/*`
+- `scripts/sync-incremental-indexes.ts`
+- 各 index builder
+
+作業:
+
+1. source ごとに change detector を分ける
+2. e-Gov は法令メタ、MHLW / JAISH は検索 index metadata と document metadata を使って差分候補を抽出する
+3. 差分結果を `added/updated/removed/unknown` に正規化する
+4. `unknown` が一定閾値を超えたら full rebuild に倒す
+
+受け入れ条件:
+
+- source ごとに差分同期の判定単位が明文化される
+- unknown が多い時に危険な incremental promote をしない
+
+テスト観点:
+
+- added / updated / removed / unknown の分類
+- unknown 多発時の full rebuild fallback
+- removed document の index 削除
+
+#### 14.2.8 ワークストリーム M: 検索品質回帰テストと障害演習
+
+目的:
+parser だけでなく、routing / ranking / degraded / rollback を CI で回帰検知できるようにする。
+
+対象ファイル:
+
+- `tests/*`
+- 新規 `tests/fixtures/indexes/*`
+- 新規障害シナリオ fixture
+
+作業:
+
+1. `index-only`, `fallback`, `stale-but-usable`, `coverage不足`, `順位安定性` を fixture で固定する
+2. 破損 snapshot, sync failure 後の last-known-good 継続, coverage 急減をテストにする
+3. `upstream unavailable でも既知 index 範囲では候補列挙可能` を固定する
+4. fallback 実行時に `route` が明示されることを固定する
+
+受け入れ条件:
+
+- source adapter が生きていても search policy の劣化を検知できる
+- snapshot rollback と stale-but-usable の契約を壊したら CI が落ちる
+
+テスト観点:
+
+- ranking regression
+- routing regression
+- rollback regression
+- degraded reason regression
 
 ### Step 1: 法令解決を分離する
 

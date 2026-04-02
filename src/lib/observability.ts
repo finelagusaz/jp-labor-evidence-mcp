@@ -340,6 +340,13 @@ function evaluateDegradedReasons(input: {
         message: `generated_at=${index.generated_at}`,
       });
     }
+    if (typeof index.coverage_ratio === 'number' && index.coverage_ratio < 0.6) {
+      reasons.push({
+        source: index.source,
+        code: 'INDEX_COVERAGE_LOW',
+        message: `coverage_ratio=${index.coverage_ratio}`,
+      });
+    }
   }
 
   return reasons;
