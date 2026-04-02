@@ -16,6 +16,7 @@ const outputSchema = createToolEnvelopeSchema(
     })),
     caches: z.array(z.object({
       name: z.string(),
+      kind: z.enum(['raw', 'normalized']),
       hits: z.number(),
       misses: z.number(),
       writes: z.number(),
@@ -81,7 +82,7 @@ export function registerGetObservabilitySnapshotTool(server: McpServer) {
       };
 
       const cacheLines = snapshot.caches.map((cache) =>
-        `- ${cache.name}: hit_rate=${cache.hit_rate}, size=${cache.size}, bytes≈${cache.estimated_bytes}`
+        `- ${cache.kind}:${cache.name}: hit_rate=${cache.hit_rate}, size=${cache.size}, bytes≈${cache.estimated_bytes}`
       );
       const upstreamLines = snapshot.upstreams.map((upstream) =>
         `- ${upstream.source}: requests=${upstream.requests}, failure_rate=${upstream.failure_rate}, parse_errors=${upstream.parse_errors}, timeouts=${upstream.timeouts}`

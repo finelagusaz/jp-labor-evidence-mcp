@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { clearAllCaches } from '../src/lib/cache.js';
 
 vi.mock('../src/lib/mhlw-client.js', () => ({
   fetchMhlwSearch: vi.fn(),
@@ -21,6 +22,7 @@ describe('mhlw-tsutatsu-service fixtures', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    clearAllCaches();
   });
 
   it('検索成功時は ok と結果一覧を返す', async () => {

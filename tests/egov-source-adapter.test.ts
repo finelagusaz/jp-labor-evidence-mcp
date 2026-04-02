@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { egovSourceAdapter } from '../src/lib/source-adapters/egov-source-adapter.js';
-import { lawDataCache, lawSearchCache } from '../src/lib/cache.js';
+import { lawDataRawCache, lawSearchRawCache } from '../src/lib/cache.js';
 
 describe('egovSourceAdapter', () => {
   beforeEach(() => {
-    lawDataCache.clear();
-    lawSearchCache.clear();
+    lawDataRawCache.clear();
+    lawSearchRawCache.clear();
     vi.stubGlobal('fetch', vi.fn());
   });
 

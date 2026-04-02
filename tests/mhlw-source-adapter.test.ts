@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mhlwDocCache, mhlwSearchCache } from '../src/lib/cache.js';
+import { mhlwDocRawCache, mhlwSearchRawCache } from '../src/lib/cache.js';
 import { mhlwSourceAdapter } from '../src/lib/source-adapters/mhlw-source-adapter.js';
 
 describe('mhlwSourceAdapter', () => {
   beforeEach(() => {
-    mhlwSearchCache.clear();
-    mhlwDocCache.clear();
+    mhlwSearchRawCache.clear();
+    mhlwDocRawCache.clear();
     vi.stubGlobal('fetch', vi.fn());
   });
 

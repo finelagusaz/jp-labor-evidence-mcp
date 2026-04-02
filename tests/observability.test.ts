@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { TTLCache } from '../src/lib/cache.js';
+import { NormalizedCache, TTLCache } from '../src/lib/cache.js';
 import { observabilityRegistry } from '../src/lib/observability.js';
 import { registerGetObservabilitySnapshotTool } from '../src/tools/get-observability-snapshot.js';
 import { createToolResult } from '../src/lib/tool-contract.js';
@@ -30,6 +30,24 @@ describe('observability', () => {
     expect(cacheMetrics?.misses).toBe(1);
     expect(cacheMetrics?.hits).toBe(1);
     expect(cacheMetrics?.evictions).toBe(1);
+    expect(cacheMetrics?.kind).toBe('raw');
+  });
+
+  it('raw と normalized cache を区別して集計できる', () => {
+    const rawCache = new TTLCache<string>('shared_name', 60_000, 2);
+    const normalizedCache = new NormalizedCache<string>('normalized_metrics', {
+      defaultTtlMs: 60_000,
+      maxEntries: 2,
+      maxBytes: 1000,
+    });
+
+    rawCache.set('a', '1');
+    normalizedCache.set('a', '1');
+
+    const snapshot = observabilityRegistry.snapshot();
+
+    expect(snapshot.caches.find((entry) => entry.name === 'shared_name')?.kind).toBe('raw');
+    expect(snapshot.caches.find((entry) => entry.name === 'normalized_metrics')?.kind).toBe('normalized');
   });
 
   it('observability snapshot tool が structuredContent を返す', async () => {

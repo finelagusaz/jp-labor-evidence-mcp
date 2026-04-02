@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TTLCache } from '../src/lib/cache.js';
+import { NormalizedCache, TTLCache } from '../src/lib/cache.js';
 
 describe('TTLCache', () => {
   it('maxEntries を超えたら古いキーから eviction する', () => {
@@ -23,5 +23,18 @@ describe('TTLCache', () => {
 
     expect(cache.size).toBe(1);
     expect(cache.get('a')).toBe('2');
+  });
+
+  it('maxBytes を超える value は保存しない', () => {
+    const cache = new NormalizedCache<string>('normalized_test', {
+      defaultTtlMs: 60_000,
+      maxEntries: 2,
+      maxBytes: 10,
+    });
+
+    const stored = cache.set('a', '1234567890abcdef');
+
+    expect(stored).toBe(false);
+    expect(cache.size).toBe(0);
   });
 });

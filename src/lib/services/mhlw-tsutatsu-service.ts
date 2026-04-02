@@ -3,6 +3,7 @@
  */
 
 import { fetchMhlwSearch, fetchMhlwDocument, getMhlwDocUrl } from '../mhlw-client.js';
+import { NormalizedCache } from '../cache.js';
 import { parseMhlwSearchResults, parseMhlwSearchCount, parseMhlwDocument } from '../mhlw-parser.js';
 import type { MhlwSearchResult, MhlwDocument, PartialFailure, WarningMessage } from '../types.js';
 import { ExternalApiError, ParseError, ValidationError } from '../errors.js';
@@ -17,6 +18,18 @@ export interface MhlwSearchResponse {
   warnings: WarningMessage[];
 }
 
+const mhlwSearchNormalizedCache = new NormalizedCache<MhlwSearchResponse>('mhlw_search_result', {
+  defaultTtlMs: 10 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
+
+const mhlwDocumentNormalizedCache = new NormalizedCache<MhlwDocument>('mhlw_document', {
+  defaultTtlMs: 15 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
+
 /**
  * 通達をキーワード検索する
  */
@@ -28,6 +41,11 @@ export async function searchMhlwTsutatsu(opts: {
     throw new ValidationError('検索キーワードが空です');
   }
   const page = opts.page ?? 0;
+  const cacheKey = `${opts.keyword}|${page}`;
+  const cached = mhlwSearchNormalizedCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   let html: string;
   try {
     html = await fetchMhlwSearch(opts.keyword, page);
@@ -67,7 +85,7 @@ export async function searchMhlwTsutatsu(opts: {
     });
   }
 
-  return {
+  const payload: MhlwSearchResponse = {
     status: 'ok',
     results,
     totalCount,
@@ -75,6 +93,8 @@ export async function searchMhlwTsutatsu(opts: {
     partialFailures: [],
     warnings,
   };
+  mhlwSearchNormalizedCache.set(cacheKey, payload);
+  return payload;
 }
 
 /**
@@ -88,6 +108,11 @@ export async function getMhlwTsutatsu(opts: {
     throw new ValidationError('dataId を指定してください');
   }
   const pageNo = opts.pageNo ?? 1;
+  const cacheKey = `${opts.dataId}|${pageNo}`;
+  const cached = mhlwDocumentNormalizedCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   const html = await fetchMhlwDocument(opts.dataId, pageNo);
 
   // MHLW がエラーページを返した場合を検出（<title>エラー</title>）
@@ -104,5 +129,7 @@ export async function getMhlwTsutatsu(opts: {
   }
   const url = getMhlwDocUrl(opts.dataId, pageNo);
 
-  return { title, dataId: opts.dataId, body, date, number, url };
+  const payload: MhlwDocument = { title, dataId: opts.dataId, body, date, number, url };
+  mhlwDocumentNormalizedCache.set(cacheKey, payload);
+  return payload;
 }

@@ -1,4 +1,4 @@
-import { lawDataCache, lawSearchCache } from '../cache.js';
+import { lawDataRawCache, lawSearchRawCache } from '../cache.js';
 import type { EgovLawData, EgovLawSearchResult } from '../types.js';
 import { HttpSourceAdapter } from './http-source-adapter.js';
 
@@ -21,7 +21,7 @@ class EgovSourceAdapter extends HttpSourceAdapter {
   }
 
   async fetchLawDataById(lawId: string): Promise<EgovLawData> {
-    const cached = lawDataCache.get(lawId);
+    const cached = lawDataRawCache.get(lawId);
     if (cached) {
       return JSON.parse(cached) as EgovLawData;
     }
@@ -35,7 +35,7 @@ class EgovSourceAdapter extends HttpSourceAdapter {
 
     const serialized = JSON.stringify(data);
     if (serialized.length <= MAX_CACHEABLE_JSON_CHARS) {
-      lawDataCache.set(lawId, serialized);
+      lawDataRawCache.set(lawId, serialized);
     }
 
     return data;
@@ -43,7 +43,7 @@ class EgovSourceAdapter extends HttpSourceAdapter {
 
   async searchLaws(keyword: string, limit: number, lawType?: string): Promise<EgovLawSearchResult[]> {
     const cacheKey = `${keyword}|${limit}|${lawType ?? ''}`;
-    const cached = lawSearchCache.get(cacheKey);
+    const cached = lawSearchRawCache.get(cacheKey);
     if (cached) {
       return JSON.parse(cached) as EgovLawSearchResult[];
     }
@@ -67,7 +67,7 @@ class EgovSourceAdapter extends HttpSourceAdapter {
 
     const serialized = JSON.stringify(results);
     if (serialized.length <= MAX_CACHEABLE_JSON_CHARS) {
-      lawSearchCache.set(cacheKey, serialized);
+      lawSearchRawCache.set(cacheKey, serialized);
     }
 
     return results;

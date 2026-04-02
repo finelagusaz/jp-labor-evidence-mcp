@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { jaishIndexCache, jaishPageCache } from '../src/lib/cache.js';
+import { jaishIndexRawCache, jaishPageRawCache } from '../src/lib/cache.js';
 import { jaishSourceAdapter } from '../src/lib/source-adapters/jaish-source-adapter.js';
 
 function readBinaryFixture(path: string): ArrayBuffer {
@@ -11,8 +11,8 @@ function readBinaryFixture(path: string): ArrayBuffer {
 
 describe('jaishSourceAdapter', () => {
   beforeEach(() => {
-    jaishIndexCache.clear();
-    jaishPageCache.clear();
+    jaishIndexRawCache.clear();
+    jaishPageRawCache.clear();
     vi.stubGlobal('fetch', vi.fn());
   });
 

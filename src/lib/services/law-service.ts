@@ -4,6 +4,7 @@
  */
 
 import { fetchLawData, searchLaws, getEgovUrl } from '../egov-client.js';
+import { NormalizedCache } from '../cache.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import type { EgovLawSearchResult } from '../types.js';
@@ -58,6 +59,24 @@ export interface FindRelatedSourcesResult {
   warnings: WarningMessage[];
 }
 
+const lawArticleNormalizedCache = new NormalizedCache<GetLawArticleResult>('law_article', {
+  defaultTtlMs: 15 * 60 * 1000,
+  maxEntries: 128,
+  maxBytes: 2_000_000,
+});
+
+const lawTocNormalizedCache = new NormalizedCache<GetLawTocResult>('law_toc', {
+  defaultTtlMs: 30 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
+
+const lawSearchNormalizedCache = new NormalizedCache<SearchLawResult>('law_search_result', {
+  defaultTtlMs: 10 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
+
 /**
  * 法令の特定条文を取得
  */
@@ -74,6 +93,12 @@ export async function getLawArticle(params: {
     throw new ValidationError('条文番号を指定してください。');
   }
 
+  const cacheKey = `${params.lawName}|${params.article}|${params.paragraph ?? ''}|${params.item ?? ''}`;
+  const cached = lawArticleNormalizedCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const { data, lawId, lawTitle } = await fetchLawData(params.lawName);
   const egovUrl = getEgovUrl(lawId);
 
@@ -88,7 +113,7 @@ export async function getLawArticle(params: {
     );
   }
 
-  return {
+  const payload = {
     lawId,
     lawTitle,
     lawNum: data.law_info.law_num,
@@ -98,6 +123,8 @@ export async function getLawArticle(params: {
     text: result.text,
     egovUrl,
   };
+  lawArticleNormalizedCache.set(cacheKey, payload);
+  return payload;
 }
 
 /**
@@ -110,11 +137,16 @@ export async function getLawToc(params: {
     throw new ValidationError('法令名または law_id を指定してください。');
   }
 
+  const cached = lawTocNormalizedCache.get(params.lawName);
+  if (cached) {
+    return cached;
+  }
+
   const { data, lawId, lawTitle } = await fetchLawData(params.lawName);
   const egovUrl = getEgovUrl(lawId);
   const toc = extractToc(data);
 
-  return {
+  const payload = {
     lawId,
     lawTitle,
     lawNum: data.law_info.law_num,
@@ -122,6 +154,8 @@ export async function getLawToc(params: {
     toc,
     egovUrl,
   };
+  lawTocNormalizedCache.set(params.lawName, payload);
+  return payload;
 }
 
 /**
@@ -137,9 +171,14 @@ export async function searchLaw(params: {
   }
 
   const limit = Math.min(params.limit ?? 10, 20);
+  const cacheKey = `${params.keyword}|${limit}|${params.lawType ?? ''}`;
+  const cached = lawSearchNormalizedCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   const results = await searchLaws(params.keyword, limit, params.lawType);
 
-  return {
+  const payload = {
     keyword: params.keyword,
     results: results.map((r: EgovLawSearchResult) => ({
       lawTitle: r.revision_info?.law_title ?? r.current_revision_info?.law_title ?? '',
@@ -149,6 +188,8 @@ export async function searchLaw(params: {
       egovUrl: getEgovUrl(r.law_info.law_id),
     })),
   };
+  lawSearchNormalizedCache.set(cacheKey, payload);
+  return payload;
 }
 
 export async function resolveLaw(params: {

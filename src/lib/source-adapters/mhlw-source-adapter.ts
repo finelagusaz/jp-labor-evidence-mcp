@@ -1,4 +1,4 @@
-import { mhlwDocCache, mhlwSearchCache } from '../cache.js';
+import { mhlwDocRawCache, mhlwSearchRawCache } from '../cache.js';
 import { HttpSourceAdapter } from './http-source-adapter.js';
 
 const BASE_URL = 'https://www.mhlw.go.jp/web';
@@ -21,7 +21,7 @@ class MhlwSourceAdapter extends HttpSourceAdapter {
 
   async fetchSearchHtml(keyword: string, page: number): Promise<string> {
     const cacheKey = `search:${keyword}:${page}`;
-    const cached = mhlwSearchCache.get(cacheKey);
+    const cached = mhlwSearchRawCache.get(cacheKey);
     if (cached) {
       return cached;
     }
@@ -34,14 +34,14 @@ class MhlwSourceAdapter extends HttpSourceAdapter {
     });
     const html = await this.fetchText(`${this.baseUrl}/t_docsrch_keyword?${params}`);
     if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
-      mhlwSearchCache.set(cacheKey, html);
+      mhlwSearchRawCache.set(cacheKey, html);
     }
     return html;
   }
 
   async fetchDocumentHtml(dataId: string, pageNo: number): Promise<string> {
     const cacheKey = `doc:${dataId}:${pageNo}`;
-    const cached = mhlwDocCache.get(cacheKey);
+    const cached = mhlwDocRawCache.get(cacheKey);
     if (cached) {
       return cached;
     }
@@ -53,7 +53,7 @@ class MhlwSourceAdapter extends HttpSourceAdapter {
     });
     const html = await this.fetchText(`${this.baseUrl}/t_doc?${params}`);
     if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
-      mhlwDocCache.set(cacheKey, html);
+      mhlwDocRawCache.set(cacheKey, html);
     }
     return html;
   }

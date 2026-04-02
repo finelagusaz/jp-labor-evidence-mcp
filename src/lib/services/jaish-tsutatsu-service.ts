@@ -3,6 +3,7 @@
  */
 
 import { fetchJaishIndex, fetchJaishPage, getJaishUrl, JAISH_INDEX_PAGES } from '../jaish-client.js';
+import { NormalizedCache } from '../cache.js';
 import { parseJaishIndex, filterJaishEntries, parseJaishDocument } from '../jaish-parser.js';
 import type { JaishIndexEntry, JaishDocument, PartialFailure, WarningMessage } from '../types.js';
 import { ParseError, ValidationError } from '../errors.js';
@@ -15,6 +16,18 @@ export interface JaishSearchResponse {
   failedPages: PartialFailure[];
   warnings: WarningMessage[];
 }
+
+const jaishSearchNormalizedCache = new NormalizedCache<JaishSearchResponse>('jaish_search_result', {
+  defaultTtlMs: 10 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
+
+const jaishDocumentNormalizedCache = new NormalizedCache<JaishDocument>('jaish_document', {
+  defaultTtlMs: 15 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
 
 /**
  * 安衛通達をキーワード検索する
@@ -44,6 +57,11 @@ export async function searchJaishTsutatsu(opts: {
 
   const limit = Math.min(opts.limit ?? 10, 30);
   const maxPages = Math.min(opts.maxPages ?? 5, JAISH_INDEX_PAGES.length);
+  const cacheKey = `${keyword}|${limit}|${maxPages}`;
+  const cached = jaishSearchNormalizedCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   const allResults: JaishIndexEntry[] = [];
   let pagesSearched = 0;
@@ -82,13 +100,17 @@ export async function searchJaishTsutatsu(opts: {
     pagesSearched > 0 ? 'partial' :
     'unavailable';
 
-  return {
+  const payload: JaishSearchResponse = {
     status,
     results: allResults.slice(0, limit),
     pagesSearched,
     failedPages,
     warnings,
   };
+  if (status === 'ok') {
+    jaishSearchNormalizedCache.set(cacheKey, payload);
+  }
+  return payload;
 }
 
 /**
@@ -100,6 +122,11 @@ export async function getJaishTsutatsu(opts: {
   if (!opts.url.trim()) {
     throw new ValidationError('JAISH の URL またはパスを指定してください');
   }
+  const cacheKey = opts.url.trim();
+  const cached = jaishDocumentNormalizedCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   const html = await fetchJaishPage(opts.url);
   const { title, body, date, number } = parseJaishDocument(html);
   if (!title.trim() && !body.trim()) {
@@ -108,5 +135,7 @@ export async function getJaishTsutatsu(opts: {
   }
   const fullUrl = getJaishUrl(opts.url);
 
-  return { title, body, date, number, url: fullUrl };
+  const payload: JaishDocument = { title, body, date, number, url: fullUrl };
+  jaishDocumentNormalizedCache.set(cacheKey, payload);
+  return payload;
 }

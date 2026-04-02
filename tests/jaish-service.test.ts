@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { clearAllCaches } from '../src/lib/cache.js';
 
 vi.mock('../src/lib/jaish-client.js', () => ({
   JAISH_INDEX_PAGES: ['/fixture/success.html', '/fixture/fail.html'],
@@ -21,6 +22,7 @@ describe('jaish-tsutatsu-service fixtures', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    clearAllCaches();
   });
 
   it('一部年度が失敗しても partial として結果を返す', async () => {

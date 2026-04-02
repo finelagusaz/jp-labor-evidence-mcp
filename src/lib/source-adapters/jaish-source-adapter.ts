@@ -1,4 +1,4 @@
-import { jaishIndexCache, jaishPageCache } from '../cache.js';
+import { jaishIndexRawCache, jaishPageRawCache } from '../cache.js';
 import { HttpSourceAdapter } from './http-source-adapter.js';
 
 const BASE_URL = 'https://www.jaish.gr.jp';
@@ -20,27 +20,27 @@ class JaishSourceAdapter extends HttpSourceAdapter {
   }
 
   async fetchIndexHtml(path: string): Promise<string> {
-    const cached = jaishIndexCache.get(path);
+    const cached = jaishIndexRawCache.get(path);
     if (cached) {
       return cached;
     }
 
     const html = this.decodeShiftJis(await this.fetchArrayBuffer(`${this.baseUrl}${path}`));
     if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
-      jaishIndexCache.set(path, html);
+      jaishIndexRawCache.set(path, html);
     }
     return html;
   }
 
   async fetchPageHtml(path: string): Promise<string> {
-    const cached = jaishPageCache.get(path);
+    const cached = jaishPageRawCache.get(path);
     if (cached) {
       return cached;
     }
 
     const html = this.decodeShiftJis(await this.fetchArrayBuffer(`${this.baseUrl}${path}`));
     if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
-      jaishPageCache.set(path, html);
+      jaishPageRawCache.set(path, html);
     }
     return html;
   }

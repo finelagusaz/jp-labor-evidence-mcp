@@ -1,5 +1,8 @@
 /**
- * シンプルなインメモリTTLキャッシュ
+ * インメモリキャッシュ
+ *
+ * - raw: upstream 応答の短期保持
+ * - normalized: 正規化済み構造化データの再利用
  */
 
 import { observabilityRegistry } from './observability.js';
@@ -9,34 +12,53 @@ interface CacheEntry<T> {
   expires: number;
 }
 
-export class TTLCache<T> {
-  private cache = new Map<string, CacheEntry<T>>();
+interface MemoryCacheOptions {
+  defaultTtlMs: number;
+  maxEntries?: number;
+  maxBytes?: number;
+}
+
+export type CacheKind = 'raw' | 'normalized';
+const registeredCaches = new Set<MemoryCache<unknown>>();
+
+export class MemoryCache<T> {
+  private readonly cache = new Map<string, CacheEntry<T>>();
   private readonly defaultTtlMs: number;
   private readonly maxEntries: number;
-  private readonly name: string;
+  private readonly maxBytes: number;
 
-  constructor(name: string, defaultTtlMs: number, maxEntries: number = 100) {
-    this.name = name;
-    this.defaultTtlMs = defaultTtlMs;
-    this.maxEntries = maxEntries;
+  constructor(
+    readonly name: string,
+    readonly kind: CacheKind,
+    options: MemoryCacheOptions,
+  ) {
+    this.defaultTtlMs = options.defaultTtlMs;
+    this.maxEntries = options.maxEntries ?? 100;
+    this.maxBytes = options.maxBytes ?? Number.POSITIVE_INFINITY;
+    registeredCaches.add(this as MemoryCache<unknown>);
   }
 
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
     if (!entry) {
-      observabilityRegistry.recordCacheMiss(this.name);
+      observabilityRegistry.recordCacheMiss(this.name, this.kind);
       return undefined;
     }
     if (Date.now() > entry.expires) {
       this.cache.delete(key);
-      observabilityRegistry.recordCacheMiss(this.name);
+      observabilityRegistry.recordCacheMiss(this.name, this.kind);
       return undefined;
     }
-    observabilityRegistry.recordCacheHit(this.name);
+    observabilityRegistry.recordCacheHit(this.name, this.kind);
     return entry.value;
   }
 
-  set(key: string, value: T, ttlMs?: number): void {
+  set(key: string, value: T, ttlMs?: number): boolean {
+    const entryBytes = estimateEntrySize(key, value);
+    if (entryBytes > this.maxBytes) {
+      return false;
+    }
+
     if (this.cache.has(key)) {
       this.cache.delete(key);
     }
@@ -45,14 +67,18 @@ export class TTLCache<T> {
       value,
       expires: Date.now() + (ttlMs ?? this.defaultTtlMs),
     });
-    observabilityRegistry.recordCacheWrite(this.name, this.estimatedBytes, this.cache.size);
 
-    while (this.cache.size > this.maxEntries) {
+    while (this.cache.size > this.maxEntries || this.estimatedBytes > this.maxBytes) {
       const oldestKey = this.cache.keys().next().value;
-      if (oldestKey === undefined) break;
+      if (oldestKey === undefined) {
+        break;
+      }
       this.cache.delete(oldestKey);
-      observabilityRegistry.recordCacheEviction(this.name, this.cache.size, this.estimatedBytes);
+      observabilityRegistry.recordCacheEviction(this.name, this.kind, this.cache.size, this.estimatedBytes);
     }
+
+    observabilityRegistry.recordCacheWrite(this.name, this.kind, this.estimatedBytes, this.cache.size);
+    return true;
   }
 
   has(key: string): boolean {
@@ -70,12 +96,44 @@ export class TTLCache<T> {
   get estimatedBytes(): number {
     let total = 0;
     for (const [key, entry] of this.cache.entries()) {
-      total += key.length * 2;
-      total += estimateValueSize(entry.value);
+      total += estimateEntrySize(key, entry.value);
       total += 16;
     }
     return total;
   }
+}
+
+export class RawResponseCache<T> extends MemoryCache<T> {
+  constructor(name: string, options: MemoryCacheOptions) {
+    super(name, 'raw', options);
+  }
+}
+
+export class NormalizedCache<T> extends MemoryCache<T> {
+  constructor(name: string, options: MemoryCacheOptions) {
+    super(name, 'normalized', options);
+  }
+}
+
+// 既存テスト互換のため残す。新規利用では RawResponseCache / NormalizedCache を使う。
+export class TTLCache<T> extends RawResponseCache<T> {
+  constructor(name: string, defaultTtlMs: number, maxEntries = 100, maxBytes?: number) {
+    super(name, {
+      defaultTtlMs,
+      maxEntries,
+      maxBytes,
+    });
+  }
+}
+
+export function clearAllCaches(): void {
+  for (const cache of registeredCaches) {
+    cache.clear();
+  }
+}
+
+function estimateEntrySize(key: string, value: unknown): number {
+  return key.length * 2 + estimateValueSize(value);
 }
 
 function estimateValueSize(value: unknown): number {
@@ -90,22 +148,44 @@ function estimateValueSize(value: unknown): number {
   }
 }
 
-// キャッシュインスタンス（セッション中共有）
+/** raw: e-Gov 法令全文 JSON */
+export const lawDataRawCache = new RawResponseCache<string>('law_data', {
+  defaultTtlMs: 60 * 60 * 1000,
+  maxEntries: 20,
+  maxBytes: 2_000_000,
+});
 
-/** 法令全文キャッシュ: TTL 1時間 */
-export const lawDataCache = new TTLCache<string>('law_data', 60 * 60 * 1000, 20);
+/** raw: e-Gov 法令検索 JSON */
+export const lawSearchRawCache = new RawResponseCache<string>('law_search', {
+  defaultTtlMs: 30 * 60 * 1000,
+  maxEntries: 100,
+  maxBytes: 2_000_000,
+});
 
-/** 法令検索結果キャッシュ: TTL 30分 */
-export const lawSearchCache = new TTLCache<string>('law_search', 30 * 60 * 1000, 100);
+/** raw: MHLW 検索結果 HTML */
+export const mhlwSearchRawCache = new RawResponseCache<string>('mhlw_search', {
+  defaultTtlMs: 30 * 60 * 1000,
+  maxEntries: 100,
+  maxBytes: 2_000_000,
+});
 
-/** MHLW 検索結果キャッシュ: TTL 30分 */
-export const mhlwSearchCache = new TTLCache<string>('mhlw_search', 30 * 60 * 1000, 100);
+/** raw: MHLW 通達本文 HTML */
+export const mhlwDocRawCache = new RawResponseCache<string>('mhlw_doc', {
+  defaultTtlMs: 60 * 60 * 1000,
+  maxEntries: 40,
+  maxBytes: 2_000_000,
+});
 
-/** MHLW 通達ページキャッシュ: TTL 1時間 */
-export const mhlwDocCache = new TTLCache<string>('mhlw_doc', 60 * 60 * 1000, 40);
+/** raw: JAISH 年度インデックス HTML */
+export const jaishIndexRawCache = new RawResponseCache<string>('jaish_index', {
+  defaultTtlMs: 24 * 60 * 60 * 1000,
+  maxEntries: 32,
+  maxBytes: 2_000_000,
+});
 
-/** JAISH インデックスキャッシュ: TTL 24時間 */
-export const jaishIndexCache = new TTLCache<string>('jaish_index', 24 * 60 * 60 * 1000, 32);
-
-/** JAISH 通達ページキャッシュ: TTL 1時間 */
-export const jaishPageCache = new TTLCache<string>('jaish_page', 60 * 60 * 1000, 40);
+/** raw: JAISH 個別本文 HTML */
+export const jaishPageRawCache = new RawResponseCache<string>('jaish_page', {
+  defaultTtlMs: 60 * 60 * 1000,
+  maxEntries: 40,
+  maxBytes: 2_000_000,
+});

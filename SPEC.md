@@ -148,6 +148,23 @@
 
 ## 8. ロードマップ
 
+### 8.0 進捗サマリ
+
+2026-04-02 時点の整理:
+
+- Phase 0: 完了
+- Phase 1: 完了
+- Phase 1.5: 完了
+- Phase 2: 完了
+- Phase 3: 完了
+- Phase 4: 未着手
+
+補足:
+
+- Phase 3 の `diff_revision` は「同一法令の改正前後比較」に限定する
+- `get_evidence_bundle` は主条文取得を必須成功条件とし、関連探索失敗は `partial_failures` に落とす
+- `find_related_sources` における委任先未登録は `warning` であり、runtime degradation ではない
+
 ### Phase 0: 緊急安定化
 
 目的: 誤答と資源枯渇を止める。
@@ -272,6 +289,13 @@
 規模感:
 
 - large
+
+現時点の残件:
+
+- 検索が外部 HTML / upstream 検索に依存している
+- raw response cache と normalized cache が概念上分かれていても、実装上はまだ明示分離されていない
+- freshness を返す内部索引モデルがない
+- `Evidence.citations` は未導入
 
 ## 9. API 再設計案
 
@@ -793,6 +817,186 @@ Phase 0 は、以下の 5 本のワークストリームに分けて進める。
 3. JAISH 一部失敗が `partial` で表現されること
 4. 不正入力が入口で拒否されること
 5. キャッシュ上限が効くこと
+
+### 14.1 Phase 4 の分解
+
+Phase 4 は、以下の 5 本のワークストリームに分けて進める。
+
+1. raw cache / normalized cache の明示分離
+2. 内部索引スキーマの導入
+3. e-Gov 索引の内部化
+4. MHLW / JAISH 検索索引の内部化
+5. freshness / 同期運用の導入
+
+着手順は以下とする。
+
+1. raw cache / normalized cache の明示分離
+2. 内部索引スキーマの導入
+3. e-Gov 索引の内部化
+4. freshness / 同期運用の導入
+5. MHLW / JAISH 検索索引の内部化
+
+理由:
+
+- cache の責務を先に分けないと、内部索引導入後の責務境界が曖昧になる
+- e-Gov は API が安定しており、最初の内部化対象として最も堅い
+- MHLW / JAISH は Phase 4 後半で HTML 依存を段階的に縮小する
+
+#### 14.1.1 ワークストリーム A: raw cache / normalized cache の明示分離
+
+目的:
+外部応答の短期キャッシュと、正規化済みデータの再利用キャッシュを分ける。
+
+対象ファイル:
+
+- `src/lib/cache.ts`
+- `src/lib/source-adapters/http-source-adapter.ts`
+- 各 source adapter
+- `src/lib/services/*`
+
+作業:
+
+1. raw response cache と normalized cache の型と責務を分ける
+2. raw response cache は短 TTL、小容量、bytes 上限ありに固定する
+3. normalized cache は構造化データのみ保持し、HTML 本文は原則保持しない
+4. observability に cache 種別を追加する
+
+受け入れ条件:
+
+- cache dump を見た時に raw と normalized が区別できる
+- normalized cache に HTML 生本文が残らない
+
+テスト観点:
+
+- raw cache eviction
+- normalized cache hit
+- oversized raw response の非保存
+
+#### 14.1.2 ワークストリーム B: 内部索引スキーマの導入
+
+目的:
+検索用の内部データモデルを先に固定する。
+
+対象ファイル:
+
+- 新規 `src/lib/indexes/*`
+- `src/lib/types.ts`
+- `src/lib/canonical-id.ts`
+
+作業:
+
+1. `LawIndexEntry`, `TsutatsuIndexEntry`, `IndexSnapshotMeta` を定義する
+2. `canonical_id`, `source_url`, `title`, `aliases`, `updated_at`, `freshness` を含める
+3. `Evidence.citations` の最小形を定義する
+4. index serialization 形式を決める
+
+受け入れ条件:
+
+- e-Gov / MHLW / JAISH の候補列挙を同一抽象で保持できる
+- freshness を index metadata として保持できる
+
+テスト観点:
+
+- schema validation
+- serialization / deserialization
+
+#### 14.1.3 ワークストリーム C: e-Gov 索引の内部化
+
+目的:
+法令候補検索を外部 API 依存から段階的に切り離す。
+
+対象ファイル:
+
+- `src/lib/services/law-service.ts`
+- 新規 `src/lib/indexes/egov-index.ts`
+- 新規同期スクリプト
+
+作業:
+
+1. プリセット法令 + alias を内部索引として保持する
+2. `resolve_law` と `search_law` を内部索引優先にする
+3. 必要時のみ upstream fallback を許す
+4. index freshness をレスポンスへ付与可能にする
+
+受け入れ条件:
+
+- 通常の `resolve_law` / `search_law` が upstream を叩かなくても成立する
+- fallback の有無が観測できる
+
+テスト観点:
+
+- index hit
+- fallback hit
+- freshness 付与
+
+#### 14.1.4 ワークストリーム D: freshness / 同期運用の導入
+
+目的:
+内部索引の更新時刻と同期状態を管理可能にする。
+
+対象ファイル:
+
+- 新規 `scripts/sync-*`
+- 新規 `src/lib/indexes/index-metadata.ts`
+- `src/tools/get-observability-snapshot.ts`
+
+作業:
+
+1. index 更新時刻、同期成功時刻、同期失敗時刻を保持する
+2. freshness を `get_observability_snapshot` から見えるようにする
+3. 同期失敗時は前回正常 index を保持する
+4. degraded 判定に `stale_index` を追加する
+
+受け入れ条件:
+
+- index の鮮度をプログラムから判定できる
+- 同期失敗で検索機能が即死しない
+
+テスト観点:
+
+- stale index
+- sync failure fallback
+- snapshot exposure
+
+#### 14.1.5 ワークストリーム E: MHLW / JAISH 検索索引の内部化
+
+目的:
+スクレイピング依存の候補検索を段階的に縮小する。
+
+対象ファイル:
+
+- 新規 `src/lib/indexes/mhlw-index.ts`
+- 新規 `src/lib/indexes/jaish-index.ts`
+- `src/lib/services/mhlw-tsutatsu-service.ts`
+- `src/lib/services/jaish-tsutatsu-service.ts`
+
+作業:
+
+1. 検索用 metadata を内部 index として保持する
+2. 検索は内部 index 優先、本文取得のみ upstream に残す
+3. upstream 検索失敗時も既知 index 範囲では候補列挙できるようにする
+4. index coverage を observability に出す
+
+受け入れ条件:
+
+- 通常検索が外部 HTML へ依存しない
+- 外部障害時も既知範囲で候補列挙できる
+
+テスト観点:
+
+- index-only search
+- upstream search unavailable
+- stale but usable search
+
+#### 14.1.6 Phase 4 の横断テスト
+
+以下は個別実装後にまとめて確認する。
+
+1. `resolve_law` / `search_law` が index hit で完結すること
+2. MHLW / JAISH 検索が upstream unavailable でも既知 index で候補を返せること
+3. freshness が snapshot から読めること
+4. stale index が degraded 判定に反映されること
+5. raw cache と normalized cache の責務が分離されていること
 
 ### Step 1: 法令解決を分離する
 

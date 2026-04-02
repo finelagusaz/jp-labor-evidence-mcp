@@ -1,5 +1,6 @@
 export interface CacheMetricsSnapshot {
   name: string;
+  kind: 'raw' | 'normalized';
   hits: number;
   misses: number;
   writes: number;
@@ -41,6 +42,7 @@ export interface DegradedReason {
 }
 
 type CacheMetricsState = {
+  kind: 'raw' | 'normalized';
   hits: number;
   misses: number;
   writes: number;
@@ -76,23 +78,23 @@ class ObservabilityRegistry {
   private readonly upstreamMetrics = new Map<string, UpstreamMetricsState>();
   private readonly partialFailures = new Map<string, number>();
 
-  recordCacheHit(name: string): void {
-    this.ensureCache(name).hits += 1;
+  recordCacheHit(name: string, kind: 'raw' | 'normalized'): void {
+    this.ensureCache(name, kind).hits += 1;
   }
 
-  recordCacheMiss(name: string): void {
-    this.ensureCache(name).misses += 1;
+  recordCacheMiss(name: string, kind: 'raw' | 'normalized'): void {
+    this.ensureCache(name, kind).misses += 1;
   }
 
-  recordCacheWrite(name: string, size: number, entries: number): void {
-    const metrics = this.ensureCache(name);
+  recordCacheWrite(name: string, kind: 'raw' | 'normalized', size: number, entries: number): void {
+    const metrics = this.ensureCache(name, kind);
     metrics.writes += 1;
     metrics.size = entries;
     metrics.estimatedBytes = size;
   }
 
-  recordCacheEviction(name: string, entries: number, size: number): void {
-    const metrics = this.ensureCache(name);
+  recordCacheEviction(name: string, kind: 'raw' | 'normalized', entries: number, size: number): void {
+    const metrics = this.ensureCache(name, kind);
     metrics.evictions += 1;
     metrics.size = entries;
     metrics.estimatedBytes = size;
@@ -160,6 +162,7 @@ class ObservabilityRegistry {
   snapshot() {
     const caches: CacheMetricsSnapshot[] = Array.from(this.cacheMetrics.entries()).map(([name, metrics]) => ({
       name,
+      kind: metrics.kind,
       hits: metrics.hits,
       misses: metrics.misses,
       writes: metrics.writes,
@@ -219,12 +222,13 @@ class ObservabilityRegistry {
     this.partialFailures.clear();
   }
 
-  private ensureCache(name: string): CacheMetricsState {
+  private ensureCache(name: string, kind: 'raw' | 'normalized'): CacheMetricsState {
     const existing = this.cacheMetrics.get(name);
     if (existing) {
       return existing;
     }
     const created: CacheMetricsState = {
+      kind,
       hits: 0,
       misses: 0,
       writes: 0,
