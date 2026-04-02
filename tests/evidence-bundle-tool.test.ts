@@ -68,5 +68,7 @@ describe('get_evidence_bundle tool', () => {
     expect(result.structuredContent.data?.primary_evidence.canonical_id).toBe('egov:322AC0000000049:article:32');
     expect(result.structuredContent.data?.partial_failures[0]?.source).toBe('mhlw');
     expect(result.structuredContent.data?.related_tsutatsu[0]?.relevance_score).toBe(0.8);
+    expect(result.content[0]?.text).toContain('## 主条文');
+    expect(result.content[0]?.text).toContain('使用者は...');
   });
 });

@@ -200,6 +200,50 @@ describe('getEvidenceBundle', () => {
     expect(result.search_keywords).toContain('安全教育');
   });
 
+  it('労基法36条では実務用語を関連検索キーワードに補完する', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      lawNum: '昭和二十二年法律第四十九号',
+      promulgationDate: '1947-04-07',
+      article: '36',
+      articleCaption: '時間外及び休日の労働',
+      text: '使用者は、協定をし、これを行政官庁に届け出た場合においては...',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      delegatedLaws: [],
+      searchKeywords: ['36協定', '時間外労働', '休日労働', '労基法 第36条'],
+      warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [],
+      totalCount: 0,
+      page: 0,
+      partialFailures: [],
+      warnings: [],
+    });
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [],
+      pagesSearched: 1,
+      failedPages: [],
+      warnings: [],
+    });
+
+    const result = await getEvidenceBundle({
+      lawId: '322AC0000000049',
+      article: '36',
+    });
+
+    expect(result.search_keywords).toContain('36協定');
+    expect(result.search_keywords).toContain('時間外労働');
+    expect(result.search_keywords).toContain('休日労働');
+  });
+
   it('一致信号が多い候補を上位に返す', async () => {
     vi.mocked(getArticleByLawId).mockResolvedValue({
       lawId: '322AC0000000049',

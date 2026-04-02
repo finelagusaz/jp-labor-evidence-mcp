@@ -66,4 +66,34 @@ describe('findRelatedSources', () => {
       '労働者災害補償保険法',
     ]);
   });
+
+  it('労基法36条では実務用語を検索キーワードに補完する', async () => {
+    vi.mocked(fetchLawData).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      data: {
+        law_info: {
+          law_id: '322AC0000000049',
+          law_type: 'Act',
+          law_num: '昭和二十二年法律第四十九号',
+          promulgation_date: '1947-04-07',
+        },
+        law_full_text: { tag: 'Law', children: [] },
+      },
+    });
+
+    const result = await findRelatedSources({
+      lawId: '322AC0000000049',
+      article: '36',
+      articleCaption: '時間外及び休日の労働',
+    });
+
+    expect(result.searchKeywords).toEqual(expect.arrayContaining([
+      '36協定',
+      '時間外労働',
+      '休日労働',
+      '労基法 第36条',
+      '労働基準法 第36条',
+    ]));
+  });
 });

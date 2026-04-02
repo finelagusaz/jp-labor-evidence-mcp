@@ -11,7 +11,7 @@ import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../i
 import { indexMetadataRegistry } from '../indexes/index-metadata.js';
 import type { IndexSnapshotMeta } from '../indexes/types.js';
 import type { EgovLawSearchResult } from '../types.js';
-import { findDelegatedLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
+import { findDelegatedLawCandidates, getKnownLawCandidateById, type LawRegistryCandidate } from '../law-registry.js';
 import type { WarningMessage } from '../types.js';
 import { decideSearchRouting, type SearchRoute } from '../search-routing-policy.js';
 
@@ -346,11 +346,12 @@ export async function findRelatedSources(params: {
 
   const { data, lawId, lawTitle } = await fetchLawData(params.lawId);
   const delegatedLaws = findDelegatedLawCandidates(lawId);
-  const searchKeywords = Array.from(new Set([
-    params.articleCaption,
-    params.article ? `${lawTitle} ${params.article}` : undefined,
+  const searchKeywords = buildRelatedSearchKeywords({
+    lawId,
     lawTitle,
-  ].map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+    article: params.article,
+    articleCaption: params.articleCaption,
+  });
 
   const warnings: WarningMessage[] = delegatedLaws.length === 0
     ? [{
@@ -367,3 +368,56 @@ export async function findRelatedSources(params: {
     warnings,
   };
 }
+
+function buildRelatedSearchKeywords(params: {
+  lawId: string;
+  lawTitle: string;
+  article?: string;
+  articleCaption?: string;
+}): string[] {
+  const articleRefCandidates = params.article
+    ? buildArticleReferenceCandidates(params.article)
+    : [];
+  const knownCandidate = getKnownLawCandidateById(params.lawId);
+  const lawAliases = knownCandidate?.aliases ?? [];
+  const seed = [
+    ...getPracticeKeywords(params.lawId, params.article),
+    params.articleCaption,
+    params.article ? `${params.lawTitle} ${normalizeArticleReference(params.article)}` : undefined,
+    ...lawAliases.map((alias) =>
+      params.article ? `${alias} ${normalizeArticleReference(params.article)}` : alias
+    ),
+    ...articleRefCandidates,
+    params.lawTitle,
+  ];
+
+  return Array.from(
+    new Set(seed.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))
+  ).slice(0, 6);
+}
+
+function buildArticleReferenceCandidates(article: string): string[] {
+  const normalized = normalizeArticleReference(article);
+  const bare = normalized.replace(/^第/, '').replace(/条$/, '');
+  return Array.from(new Set([
+    normalized,
+    bare,
+    `第${bare}条`,
+    `${bare}条`,
+  ]));
+}
+
+function normalizeArticleReference(article: string): string {
+  const raw = article.replace(/_/g, 'の').trim();
+  return /^第.+条$/.test(raw) ? raw : `第${raw.replace(/^第/, '').replace(/条$/, '')}条`;
+}
+
+function getPracticeKeywords(lawId: string, article?: string): string[] {
+  const normalizedArticle = article?.replace(/_/g, 'の').replace(/^第/, '').replace(/条$/, '');
+  const key = normalizedArticle ? `${lawId}:${normalizedArticle}` : lawId;
+  return RELATED_SOURCE_KEYWORD_MAP[key] ?? [];
+}
+
+const RELATED_SOURCE_KEYWORD_MAP: Record<string, string[]> = {
+  '322AC0000000049:36': ['36協定', '時間外労働', '休日労働'],
+};

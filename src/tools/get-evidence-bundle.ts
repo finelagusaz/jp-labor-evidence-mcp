@@ -114,6 +114,9 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
         const relatedLines = result.related_tsutatsu.map((evidence, index) =>
           `${index + 1}. [${evidence.source_type}] ${evidence.title}\n   ${evidence.date ?? ''} ${evidence.number ?? ''}\n   score=${evidence.relevance_score ?? '-'} reason=${evidence.relevance_reason ?? '-'}`.trim()
         );
+        const delegatedLines = result.delegated_evidence.map((evidence, index) =>
+          `${index + 1}. ${evidence.title}\n${evidence.body ?? '本文なし'}`
+        );
         const warningSection = result.warnings.length > 0
           ? `\n\n警告:\n${result.warnings.map((warning) => `- [${warning.code}] ${warning.message}`).join('\n')}`
           : '';
@@ -124,7 +127,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
         return createToolResult(
           'get_evidence_bundle',
           envelope,
-          `# Evidence Bundle\n\n主根拠: ${result.primary_evidence.title}\n関連検索キーワード: ${result.search_keywords.join(' / ')}\n関連通達候補: ${result.related_tsutatsu.length}件\n\n${relatedLines.join('\n\n') || '関連通達候補なし'}${warningSection}${partialSection}`,
+          `# Evidence Bundle\n\n主根拠: ${result.primary_evidence.title}\n\n## 主条文\n${result.primary_evidence.body ?? '本文なし'}\n\n## 委任先法令候補\n${delegatedLines.join('\n\n') || '委任先法令候補なし'}\n\n## 関連検索キーワード\n${result.search_keywords.join(' / ') || 'なし'}\n\n## 関連通達候補\n${relatedLines.join('\n\n') || '関連通達候補なし'}${warningSection}${partialSection}`,
           startedAt,
         );
       } catch (error) {
