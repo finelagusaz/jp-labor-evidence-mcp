@@ -46,6 +46,11 @@ const evidenceSchema = z.object({
   number: z.string().optional(),
   relevance_score: z.number().optional(),
   matched_keywords: z.array(z.string()).optional(),
+  matched_signals: z.array(z.object({
+    type: z.enum(['law_title', 'article_ref', 'heading', 'body_keyword', 'source_priority']),
+    value: z.string(),
+    weight: z.number(),
+  })).optional(),
   relevance_reason: z.string().optional(),
 });
 

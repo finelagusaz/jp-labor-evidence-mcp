@@ -21,11 +21,14 @@ Claude などの上位クライアントが労務の質問に回答する際、*
 |---|---|
 | `resolve_law` | 法令名・略称・law_id から法令候補を確定 |
 | `get_article` | e-Gov法令APIから条文を取得。確定済みの law_id + 条番号で指定 |
+| `find_related_sources` | 条文に関連しうる委任先法令候補と通達検索キーワードを返す |
+| `get_evidence_bundle` | 主条文、委任先法令、関連通達候補を束ねた evidence bundle を返す |
 | `search_law` | キーワードで法令を検索 |
 | `search_mhlw_tsutatsu` | 厚労省法令等DBから通達をキーワード検索 |
 | `get_mhlw_tsutatsu` | 厚労省通達の本文を取得。data_idで指定 |
 | `search_jaish_tsutatsu` | JAISH安全衛生情報センターから安衛通達を検索 |
 | `get_jaish_tsutatsu` | JAISH安衛通達の本文を取得。URLで指定 |
+| `get_observability_snapshot` | cache・upstream・tool 単位の観測スナップショットを返す |
 
 ### 旧互換ツール
 
@@ -150,12 +153,38 @@ npm run build
 
 → `search_jaish_tsutatsu(keyword="足場")`
 
+### Evidence Bundle の取得
+
+> 「労働基準法第32条の根拠セットを集めて」
+
+→ `resolve_law(query="労働基準法")`
+→ `get_evidence_bundle(law_id="322AC0000000049", article="32")`
+
+`get_evidence_bundle` は以下をまとめて返します。
+
+- 主条文 (`primary_evidence`)
+- 委任先法令候補 (`delegated_evidence`)
+- 関連通達候補 (`related_tsutatsu`)
+- 警告 (`warnings`)
+- 部分失敗 (`partial_failures`)
+
+関連通達候補は `relevance_score` の降順で返します。スコアは単純な件数順ではなく、以下の `match signal` を加点して計算します。
+
+- `law_title`: 法令名一致
+- `article_ref`: 条番号一致
+- `heading`: 条見出し一致
+- `body_keyword`: 条文本文由来キーワード一致
+- `source_priority`: source 種別の優先度
+
+各候補には `matched_signals` と `relevance_reason` が含まれるため、なぜ上位に来たのかを追跡できます。
+
 ### 一次情報取得ワークフロー
 
 1. 上位クライアントが論点に対応する法令・通達候補を特定する
 2. `search_law` または `resolve_law` で `law_id` を確認する
-3. `get_article` / `search_mhlw_tsutatsu` / `search_jaish_tsutatsu` で一次情報を取得する
-4. 上位クライアントが取得結果を根拠として要約・説明する
+3. `get_article` または `get_evidence_bundle` で一次情報を取得する
+4. 必要に応じて `find_related_sources`、`search_mhlw_tsutatsu`、`search_jaish_tsutatsu` で探索を補強する
+5. 上位クライアントが取得結果を根拠として要約・説明する
 
 ## 出典
 

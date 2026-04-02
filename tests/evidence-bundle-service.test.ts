@@ -89,8 +89,11 @@ describe('getEvidenceBundle', () => {
     expect(result.related_tsutatsu[0]?.canonical_id).toBe('mhlw:00tb2035');
     expect(result.delegated_evidence).toHaveLength(1);
     expect(result.related_tsutatsu[0]?.matched_keywords).toContain('労働時間');
-    expect(result.related_tsutatsu[0]?.relevance_score).toBeGreaterThan(0.5);
-    expect(result.related_tsutatsu[0]?.relevance_reason).toContain('労働時間');
+    expect(result.related_tsutatsu[0]?.matched_signals?.map((signal) => signal.type)).toEqual(
+      expect.arrayContaining(['source_priority', 'heading', 'body_keyword'])
+    );
+    expect(result.related_tsutatsu[0]?.relevance_score).toBeGreaterThan(0.4);
+    expect(result.related_tsutatsu[0]?.relevance_reason).toContain('見出し一致');
   });
 
   it('partial failure があれば partial を返す', async () => {
@@ -150,7 +153,7 @@ describe('getEvidenceBundle', () => {
     expect(result.partial_failures).toHaveLength(2);
     expect(result.warnings[0]?.code).toBe('NO_DELEGATED_LAWS_CONFIGURED');
     expect(result.related_tsutatsu[0]?.canonical_id).toBe('jaish:/anzen/example.htm');
-    expect(result.related_tsutatsu[0]?.relevance_reason).toContain('足場');
+    expect(result.related_tsutatsu[0]?.relevance_reason).toContain('本文語一致');
   });
 
   it('明示キーワードがなければ本文から補助キーワードを生成する', async () => {
@@ -194,5 +197,64 @@ describe('getEvidenceBundle', () => {
 
     expect(result.search_keywords).toContain('危険防止');
     expect(result.search_keywords).toContain('安全教育');
+  });
+
+  it('一致信号が多い候補を上位に返す', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      lawNum: '昭和二十二年法律第四十九号',
+      promulgationDate: '1947-04-07',
+      article: '32',
+      articleCaption: '労働時間',
+      text: '使用者は、労働者に...',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      delegatedLaws: [],
+      searchKeywords: ['労働時間'],
+      warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [{
+        title: '労働基準法第32条の運用について',
+        dataId: '00tb2036',
+        date: '2024-02-01',
+        shubetsu: '基発0201第1号',
+      }],
+      totalCount: 1,
+      page: 0,
+      partialFailures: [],
+      warnings: [],
+    });
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [{
+        title: '労働時間管理の参考資料',
+        number: '基安発0201第2号',
+        date: '2024-02-01',
+        url: '/anzen/example-2.htm',
+      }],
+      pagesSearched: 1,
+      failedPages: [],
+      warnings: [],
+    });
+
+    const result = await getEvidenceBundle({
+      lawId: '322AC0000000049',
+      article: '32',
+      relatedKeywords: ['労働時間'],
+    });
+
+    expect(result.related_tsutatsu[0]?.canonical_id).toBe('mhlw:00tb2036');
+    expect(result.related_tsutatsu[0]?.matched_signals?.map((signal) => signal.type)).toEqual(
+      expect.arrayContaining(['law_title', 'article_ref', 'source_priority'])
+    );
+    expect(result.related_tsutatsu[0]?.relevance_score).toBeGreaterThan(
+      result.related_tsutatsu[1]?.relevance_score ?? 0
+    );
   });
 });

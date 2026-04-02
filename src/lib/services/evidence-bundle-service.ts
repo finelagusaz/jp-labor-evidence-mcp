@@ -25,7 +25,14 @@ export interface EvidenceRecord {
   number?: string;
   relevance_score?: number;
   matched_keywords?: string[];
+  matched_signals?: MatchSignal[];
   relevance_reason?: string;
+}
+
+export interface MatchSignal {
+  type: 'law_title' | 'article_ref' | 'heading' | 'body_keyword' | 'source_priority';
+  value: string;
+  weight: number;
 }
 
 export interface EvidenceBundleResult {
@@ -124,6 +131,9 @@ export async function getEvidenceBundle(params: {
           date: result.date,
           number: result.shubetsu,
           scoringText: `${result.title} ${result.shubetsu} ${result.date}`,
+          lawTitle: primary.lawTitle,
+          article: params.article,
+          articleCaption: primary.articleCaption,
           keywords,
         })
       )
@@ -151,6 +161,9 @@ export async function getEvidenceBundle(params: {
             date: result.date,
             number: result.number,
             scoringText: `${result.title} ${result.number} ${result.date}`,
+            lawTitle: primary.lawTitle,
+            article: params.article,
+            articleCaption: primary.articleCaption,
             keywords,
           })
         )
@@ -264,10 +277,23 @@ function buildRelatedTsutatsuCandidate(params: {
   date?: string;
   number?: string;
   scoringText: string;
+  lawTitle: string;
+  article: string;
+  articleCaption?: string;
   keywords: string[];
 }): EvidenceRecord {
-  const score = computeRelevanceScore(params.scoringText, params.keywords, params.sourceType);
-  const matchedKeywords = params.keywords.filter((keyword) => params.scoringText.includes(keyword));
+  const signals = collectMatchSignals({
+    scoringText: params.scoringText,
+    sourceType: params.sourceType,
+    lawTitle: params.lawTitle,
+    article: params.article,
+    articleCaption: params.articleCaption,
+    keywords: params.keywords,
+  });
+  const score = computeRelevanceScore(signals);
+  const matchedKeywords = signals
+    .filter((signal) => signal.type === 'body_keyword')
+    .map((signal) => signal.value);
 
   return {
     source_type: params.sourceType,
@@ -282,32 +308,125 @@ function buildRelatedTsutatsuCandidate(params: {
     number: params.number,
     relevance_score: score,
     matched_keywords: matchedKeywords,
-    relevance_reason: describeRelevance(params.sourceType, matchedKeywords, score),
+    matched_signals: signals,
+    relevance_reason: describeRelevance(params.sourceType, signals, score),
   };
 }
 
-function computeRelevanceScore(
-  scoringText: string,
-  keywords: string[],
-  sourceType: 'mhlw' | 'jaish',
-): number {
-  let score = sourceType === 'jaish' ? 0.45 : 0.4;
-  for (const keyword of keywords) {
-    if (scoringText.includes(keyword)) {
-      score += 0.2;
+function collectMatchSignals(params: {
+  scoringText: string;
+  sourceType: 'mhlw' | 'jaish';
+  lawTitle: string;
+  article: string;
+  articleCaption?: string;
+  keywords: string[];
+}): MatchSignal[] {
+  const signals: MatchSignal[] = [];
+  const articleRefs = buildArticleReferenceCandidates(params.article);
+
+  signals.push({
+    type: 'source_priority',
+    value: params.sourceType === 'mhlw' ? 'mhlw' : 'jaish',
+    weight: params.sourceType === 'mhlw' ? 0.12 : 0.08,
+  });
+
+  if (params.scoringText.includes(params.lawTitle)) {
+    signals.push({
+      type: 'law_title',
+      value: params.lawTitle,
+      weight: 0.4,
+    });
+  }
+
+  for (const articleRef of articleRefs) {
+    if (params.scoringText.includes(articleRef)) {
+      signals.push({
+        type: 'article_ref',
+        value: articleRef,
+        weight: 0.25,
+      });
+      break;
     }
+  }
+
+  if (params.articleCaption && params.scoringText.includes(params.articleCaption)) {
+    signals.push({
+      type: 'heading',
+      value: params.articleCaption,
+      weight: 0.22,
+    });
+  }
+
+  for (const keyword of params.keywords) {
+    if (!params.scoringText.includes(keyword)) {
+      continue;
+    }
+    signals.push({
+      type: 'body_keyword',
+      value: keyword,
+      weight: 0.12,
+    });
+  }
+
+  return dedupeSignals(signals);
+}
+
+function computeRelevanceScore(signals: MatchSignal[]): number {
+  let score = 0;
+  for (const signal of signals) {
+    score += signal.weight;
   }
   return Number(Math.min(0.99, score).toFixed(2));
 }
 
 function describeRelevance(
   sourceType: 'mhlw' | 'jaish',
-  matchedKeywords: string[],
+  signals: MatchSignal[],
   score: number,
 ): string {
   const sourceLabel = sourceType === 'jaish' ? 'JAISH 安衛通達検索' : '厚労省通達検索';
-  if (matchedKeywords.length === 0) {
-    return `${sourceLabel} の候補。明示キーワード一致は弱いが、関連検索結果に含まれたため採用。score=${score}`;
+  const reasonParts = signals
+    .filter((signal) => signal.type !== 'source_priority')
+    .map((signal) => {
+      switch (signal.type) {
+        case 'law_title':
+          return `法令名一致(${signal.value})`;
+        case 'article_ref':
+          return `条番号一致(${signal.value})`;
+        case 'heading':
+          return `見出し一致(${signal.value})`;
+        case 'body_keyword':
+          return `本文語一致(${signal.value})`;
+        default:
+          return null;
+      }
+    })
+    .filter((value): value is string => value !== null);
+
+  if (reasonParts.length === 0) {
+    return `${sourceLabel} の候補。明示的な一致信号は弱いが、source 優先度により採用。score=${score}`;
   }
-  return `${sourceLabel} で ${matchedKeywords.join('、')} に一致。score=${score}`;
+  return `${sourceLabel} で ${reasonParts.join(' / ')}。score=${score}`;
+}
+
+function buildArticleReferenceCandidates(article: string): string[] {
+  const normalized = article.replace(/_/g, 'の').replace(/^第/, '').replace(/条$/, '');
+  const candidates = [
+    `第${normalized}条`,
+    `${normalized}条`,
+    normalized,
+  ];
+  return Array.from(new Set(candidates));
+}
+
+function dedupeSignals(signals: MatchSignal[]): MatchSignal[] {
+  const seen = new Set<string>();
+  return signals.filter((signal) => {
+    const key = `${signal.type}:${signal.value}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
