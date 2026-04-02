@@ -81,6 +81,7 @@ describe('observability', () => {
     expect(result.structuredContent.status).toBe('ok');
     expect(result.structuredContent.data?.upstreams[0]?.source).toBe('egov');
     expect(result.structuredContent.data?.indexes[0]?.source).toBe('egov');
+    expect(result.structuredContent.data?.indexes[0]?.coverage_ratio).toBeUndefined();
     expect(result.structuredContent.data?.partial_failures.jaish).toBe(2);
     expect(result.structuredContent.data?.tools[0]?.tool).toBe('resolve_law');
     expect(result.structuredContent.data?.degraded_reasons.some((reason) => reason.source === 'jaish')).toBe(true);

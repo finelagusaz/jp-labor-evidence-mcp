@@ -55,6 +55,8 @@ const outputSchema = createToolEnvelopeSchema(
       last_failure_at: z.string().optional(),
       freshness: z.enum(['fresh', 'stale', 'unknown']),
       entry_count: z.number(),
+      coverage_ratio: z.number().optional(),
+      storage_path: z.string().optional(),
     })),
     partial_failures: z.record(z.string(), z.number()),
   })
@@ -97,7 +99,7 @@ export function registerGetObservabilitySnapshotTool(server: McpServer) {
         `- ${upstream.source}: requests=${upstream.requests}, failure_rate=${upstream.failure_rate}, parse_errors=${upstream.parse_errors}, timeouts=${upstream.timeouts}`
       );
       const indexLines = snapshot.indexes.map((index) =>
-        `- ${index.source}: freshness=${index.freshness}, entries=${index.entry_count}, generated_at=${index.generated_at}`
+        `- ${index.source}: freshness=${index.freshness}, entries=${index.entry_count}, coverage=${index.coverage_ratio ?? '-'}, path=${index.storage_path ?? '-'}`
       );
 
       return createToolResult(

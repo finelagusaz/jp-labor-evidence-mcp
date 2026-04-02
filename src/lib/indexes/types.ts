@@ -12,6 +12,8 @@ export interface IndexSnapshotMeta {
   last_failure_at?: string;
   freshness: IndexFreshness;
   entry_count: number;
+  coverage_ratio?: number;
+  storage_path?: string;
 }
 
 export interface LawIndexEntry {

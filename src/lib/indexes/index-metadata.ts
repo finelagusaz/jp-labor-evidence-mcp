@@ -1,3 +1,4 @@
+import { getIndexFilePath, hasPersistedIndex } from './index-store.js';
 import type { IndexFreshness, IndexSnapshotMeta } from './types.js';
 
 const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
@@ -9,6 +10,7 @@ type MutableIndexSnapshotMeta = {
   last_failure_at?: string;
   freshness?: IndexFreshness;
   entry_count: number;
+  coverage_ratio?: number;
 };
 
 class IndexMetadataRegistry {
@@ -18,7 +20,12 @@ class IndexMetadataRegistry {
     this.snapshots.set(snapshot.source, snapshot);
   }
 
-  recordSuccess(source: 'egov' | 'mhlw' | 'jaish', generatedAt: string, entryCount: number): void {
+  recordSuccess(
+    source: 'egov' | 'mhlw' | 'jaish',
+    generatedAt: string,
+    entryCount: number,
+    coverageRatio?: number,
+  ): void {
     const existing = this.snapshots.get(source);
     this.snapshots.set(source, {
       source,
@@ -27,6 +34,7 @@ class IndexMetadataRegistry {
       last_failure_at: existing?.last_failure_at,
       freshness: 'fresh',
       entry_count: entryCount,
+      coverage_ratio: coverageRatio ?? existing?.coverage_ratio,
     });
   }
 
@@ -54,6 +62,8 @@ class IndexMetadataRegistry {
         last_failure_at: snapshot.last_failure_at,
         freshness: snapshot.freshness ?? inferFreshness(snapshot.generated_at),
         entry_count: snapshot.entry_count,
+        coverage_ratio: snapshot.coverage_ratio,
+        storage_path: hasPersistedIndex(snapshot.source) ? getIndexFilePath(snapshot.source) : undefined,
       }))
       .sort((a, b) => a.source.localeCompare(b.source, 'ja-JP'));
   }

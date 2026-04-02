@@ -22,5 +22,6 @@ describe('egov index', () => {
 
     expect(meta.source).toBe('egov');
     expect(meta.entry_count).toBeGreaterThan(10);
+    expect(meta.coverage_ratio).toBe(1);
   });
 });

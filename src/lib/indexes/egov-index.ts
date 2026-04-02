@@ -1,6 +1,8 @@
 import { LAW_ALIAS_MAP, LAW_ID_MAP, type LawRegistryCandidate, isEgovLawId, resolveLawNameStrict, getKnownLawCandidateById } from '../law-registry.js';
 import { buildLawIndexEntry } from './builders.js';
 import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
+import { loadLawIndexSnapshot, saveLawIndexSnapshot } from './index-store.js';
+import type { SerializedLawIndex } from './serialization.js';
 import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
 
 const GENERATED_AT = '2026-04-02T00:00:00.000Z';
@@ -27,7 +29,7 @@ function buildAliasesByTitle(): Map<string, string[]> {
 
 const ALIASES_BY_TITLE = buildAliasesByTitle();
 
-const LAW_INDEX_ENTRIES: LawIndexEntry[] = Object.entries(LAW_ID_MAP)
+const DEFAULT_LAW_INDEX_ENTRIES: LawIndexEntry[] = Object.entries(LAW_ID_MAP)
   .map(([lawTitle, lawId]) =>
     buildLawIndexEntry({
       lawId,
@@ -41,22 +43,55 @@ const LAW_INDEX_ENTRIES: LawIndexEntry[] = Object.entries(LAW_ID_MAP)
   )
   .sort((a, b) => a.law_title.localeCompare(b.law_title, 'ja-JP'));
 
-const EGOV_INDEX_META: IndexSnapshotMeta = {
+const DEFAULT_EGOV_INDEX_META: IndexSnapshotMeta = {
   source: 'egov',
   generated_at: GENERATED_AT,
   last_success_at: GENERATED_AT,
   freshness: inferFreshness(GENERATED_AT),
-  entry_count: LAW_INDEX_ENTRIES.length,
+  entry_count: DEFAULT_LAW_INDEX_ENTRIES.length,
+  coverage_ratio: 1,
 };
 
-indexMetadataRegistry.register(EGOV_INDEX_META);
+let lawIndexEntries: LawIndexEntry[] = DEFAULT_LAW_INDEX_ENTRIES;
+let egovIndexMeta: IndexSnapshotMeta = DEFAULT_EGOV_INDEX_META;
+
+indexMetadataRegistry.register(egovIndexMeta);
 
 export function getEgovIndexMeta(): IndexSnapshotMeta {
-  return EGOV_INDEX_META;
+  return egovIndexMeta;
 }
 
 export function getEgovIndexEntries(): LawIndexEntry[] {
-  return LAW_INDEX_ENTRIES;
+  return lawIndexEntries;
+}
+
+export function getEgovIndexSnapshot(): SerializedLawIndex {
+  return {
+    meta: egovIndexMeta,
+    entries: lawIndexEntries,
+  };
+}
+
+export function initializeEgovIndex(): void {
+  const persisted = loadLawIndexSnapshot('egov');
+  if (persisted) {
+    lawIndexEntries = persisted.entries;
+    egovIndexMeta = persisted.meta;
+    indexMetadataRegistry.register(egovIndexMeta);
+    return;
+  }
+
+  persistEgovIndex();
+}
+
+export function persistEgovIndex(): void {
+  egovIndexMeta = {
+    ...egovIndexMeta,
+    entry_count: lawIndexEntries.length,
+    freshness: inferFreshness(egovIndexMeta.generated_at),
+  };
+  indexMetadataRegistry.register(egovIndexMeta);
+  saveLawIndexSnapshot('egov', getEgovIndexSnapshot());
 }
 
 export function resolveLawFromEgovIndex(query: string): {
@@ -66,13 +101,13 @@ export function resolveLawFromEgovIndex(query: string): {
 } {
   const trimmed = query.trim();
   if (!trimmed) {
-    return { resolution: 'not_found', candidates: [], meta: EGOV_INDEX_META };
+      return { resolution: 'not_found', candidates: [], meta: egovIndexMeta };
   }
 
   if (isEgovLawId(trimmed)) {
     const known = getKnownLawCandidateById(trimmed);
     if (known) {
-      return { resolution: 'resolved', candidates: [known], meta: EGOV_INDEX_META };
+      return { resolution: 'resolved', candidates: [known], meta: egovIndexMeta };
     }
     return {
       resolution: 'resolved',
@@ -83,7 +118,7 @@ export function resolveLawFromEgovIndex(query: string): {
         sourceUrl: `https://laws.e-gov.go.jp/law/${trimmed}`,
         aliases: [],
       }],
-      meta: EGOV_INDEX_META,
+      meta: egovIndexMeta,
     };
   }
 
@@ -92,7 +127,7 @@ export function resolveLawFromEgovIndex(query: string): {
     return {
       resolution: 'resolved',
       candidates: [toCandidate(findEntryByLawId(strict.lawId)!)],
-      meta: EGOV_INDEX_META,
+      meta: egovIndexMeta,
     };
   }
 
@@ -105,7 +140,7 @@ export function resolveLawFromEgovIndex(query: string): {
   return {
     resolution,
     candidates: matches,
-    meta: EGOV_INDEX_META,
+    meta: egovIndexMeta,
   };
 }
 
@@ -115,7 +150,7 @@ export function searchEgovIndex(keyword: string, lawType?: string, limit = 10): 
     return [];
   }
 
-  return LAW_INDEX_ENTRIES
+  return lawIndexEntries
     .filter((entry) => {
       if (lawType && entry.law_type !== lawType) {
         return false;
@@ -127,7 +162,7 @@ export function searchEgovIndex(keyword: string, lawType?: string, limit = 10): 
 }
 
 function findEntryByLawId(lawId: string): LawIndexEntry | undefined {
-  return LAW_INDEX_ENTRIES.find((entry) => entry.law_id === lawId);
+  return lawIndexEntries.find((entry) => entry.law_id === lawId);
 }
 
 function toCandidate(entry: LawIndexEntry): LawRegistryCandidate {

@@ -108,6 +108,14 @@ npm install
 npm run build
 ```
 
+内部 index を明示的に書き出す場合:
+
+```bash
+npm run sync:indexes
+```
+
+保存先は既定で `./.labor-law-indexes` です。`LABOR_LAW_MCP_INDEX_DIR` を指定すると変更できます。
+
 ```json
 {
   "mcpServers": {

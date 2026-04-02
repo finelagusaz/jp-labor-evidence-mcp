@@ -1,5 +1,7 @@
 import { buildJaishIndexEntry, buildMhlwIndexEntry } from './builders.js';
 import { indexMetadataRegistry } from './index-metadata.js';
+import { loadTsutatsuIndexSnapshot, saveTsutatsuIndexSnapshot } from './index-store.js';
+import type { SerializedTsutatsuIndex } from './serialization.js';
 import type { IndexSnapshotMeta, TsutatsuIndexEntry } from './types.js';
 import type { JaishIndexEntry, MhlwSearchResult } from '../types.js';
 
@@ -16,6 +18,7 @@ class TsutatsuIndexRegistry {
       store.set(entry.canonical_id, entry);
     }
     indexMetadataRegistry.recordSuccess('mhlw', generatedAt, store.size);
+    this.persist('mhlw');
   }
 
   recordJaishResults(results: JaishIndexEntry[], generatedAt = new Date().toISOString()): void {
@@ -25,10 +28,12 @@ class TsutatsuIndexRegistry {
       store.set(entry.canonical_id, entry);
     }
     indexMetadataRegistry.recordSuccess('jaish', generatedAt, store.size);
+    this.persist('jaish');
   }
 
   recordFailure(source: 'mhlw' | 'jaish', failedAt = new Date().toISOString()): void {
     indexMetadataRegistry.recordFailure(source, failedAt);
+    this.persist(source);
   }
 
   search(source: 'mhlw' | 'jaish', keyword: string, limit: number): {
@@ -55,6 +60,35 @@ class TsutatsuIndexRegistry {
 
   getMeta(source: 'mhlw' | 'jaish'): IndexSnapshotMeta | undefined {
     return indexMetadataRegistry.list().find((entry) => entry.source === source);
+  }
+
+  getSnapshot(source: 'mhlw' | 'jaish'): SerializedTsutatsuIndex {
+    return {
+      meta: this.getMeta(source) ?? {
+        source,
+        generated_at: new Date(0).toISOString(),
+        freshness: 'unknown',
+        entry_count: this.entries.get(source)!.size,
+      },
+      entries: Array.from(this.entries.get(source)!.values()),
+    };
+  }
+
+  loadFromDisk(source: 'mhlw' | 'jaish'): void {
+    const snapshot = loadTsutatsuIndexSnapshot(source);
+    if (!snapshot) {
+      return;
+    }
+    const store = this.entries.get(source)!;
+    store.clear();
+    for (const entry of snapshot.entries) {
+      store.set(entry.canonical_id, entry);
+    }
+    indexMetadataRegistry.register(snapshot.meta);
+  }
+
+  persist(source: 'mhlw' | 'jaish'): void {
+    saveTsutatsuIndexSnapshot(source, this.getSnapshot(source));
   }
 
   reset(): void {
