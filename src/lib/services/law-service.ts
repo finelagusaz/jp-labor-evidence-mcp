@@ -7,7 +7,7 @@ import { fetchLawData, searchLaws, getEgovUrl } from '../egov-client.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import type { EgovLawSearchResult } from '../types.js';
-import { resolveLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
+import { findDelegatedLawCandidates, resolveLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
 import type { WarningMessage } from '../types.js';
 
 export interface GetLawArticleResult {
@@ -47,6 +47,14 @@ export interface ResolveLawResult {
   query: string;
   resolution: 'resolved' | 'ambiguous' | 'not_found';
   candidates: LawRegistryCandidate[];
+  warnings: WarningMessage[];
+}
+
+export interface FindRelatedSourcesResult {
+  lawId: string;
+  lawTitle: string;
+  delegatedLaws: LawRegistryCandidate[];
+  searchKeywords: string[];
   warnings: WarningMessage[];
 }
 
@@ -229,4 +237,37 @@ export async function getArticleByLawId(params: {
   });
 
   return result;
+}
+
+export async function findRelatedSources(params: {
+  lawId: string;
+  article?: string;
+  articleCaption?: string;
+}): Promise<FindRelatedSourcesResult> {
+  if (!params.lawId.trim()) {
+    throw new ValidationError('law_id を指定してください。');
+  }
+
+  const { data, lawId, lawTitle } = await fetchLawData(params.lawId);
+  const delegatedLaws = findDelegatedLawCandidates(lawId);
+  const searchKeywords = Array.from(new Set([
+    params.articleCaption,
+    params.article ? `${lawTitle} ${params.article}` : undefined,
+    lawTitle,
+  ].map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+
+  const warnings: WarningMessage[] = delegatedLaws.length === 0
+    ? [{
+        code: 'NO_DELEGATED_LAWS_CONFIGURED',
+        message: 'この法令に対する委任先法令の対応表は未登録です。',
+      }]
+    : [];
+
+  return {
+    lawId,
+    lawTitle,
+    delegatedLaws,
+    searchKeywords,
+    warnings,
+  };
 }

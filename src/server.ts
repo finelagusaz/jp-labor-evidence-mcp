@@ -1,5 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerGetArticleTool } from './tools/get-article.js';
+import { registerGetEvidenceBundleTool } from './tools/get-evidence-bundle.js';
+import { registerFindRelatedSourcesTool } from './tools/find-related-sources.js';
 import { registerGetObservabilitySnapshotTool } from './tools/get-observability-snapshot.js';
 import { registerGetLawTool } from './tools/get-law.js';
 import { registerResolveLawTool } from './tools/resolve-law.js';
@@ -40,6 +42,8 @@ export function createServer(): McpServer {
   // 法令ツール（e-Gov API v2）
   registerResolveLawTool(server);   // resolve_law: 法令候補の確定
   registerGetArticleTool(server);   // get_article: law_id 指定で条文取得
+  registerFindRelatedSourcesTool(server); // find_related_sources: 委任先法令と探索キーワード
+  registerGetEvidenceBundleTool(server); // get_evidence_bundle: 条文 + 関連通達候補の束ね
   registerGetLawTool(server);       // get_law: 旧互換ツール（非推奨）
   registerSearchLawTool(server);    // search_law: 法令キーワード検索
 

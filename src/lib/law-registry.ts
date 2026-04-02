@@ -131,6 +131,14 @@ export const LAW_ALIAS_MAP: Record<string, string> = {
   '社労士法': '社会保険労務士法',
 };
 
+const LAW_DELEGATION_MAP: Record<string, string[]> = {
+  '労働基準法': ['労働基準法施行令', '労働基準法施行規則'],
+  '労働安全衛生法': ['労働安全衛生法施行令', '労働安全衛生規則'],
+  '雇用保険法': ['雇用保険法施行令', '雇用保険法施行規則'],
+  '労働者災害補償保険法': ['労働保険の保険料の徴収等に関する法律'],
+  '労働保険の保険料の徴収等に関する法律': ['労働者災害補償保険法', '雇用保険法'],
+};
+
 export interface LawRegistryCandidate {
   lawId: string;
   lawTitle: string;
@@ -252,4 +260,100 @@ export function resolveLawCandidates(query: string): LawRegistryCandidate[] {
   }
 
   return Array.from(matches.values()).sort((a, b) => a.lawTitle.localeCompare(b.lawTitle, 'ja-JP'));
+}
+
+export function findDelegatedLawCandidates(lawId: string): LawRegistryCandidate[] {
+  const self = getKnownLawCandidateById(lawId);
+  if (!self) {
+    return [];
+  }
+
+  const titles = new Set<string>();
+  for (const title of inferDelegatedTitles(self.lawTitle)) {
+    titles.add(title);
+  }
+  const direct = LAW_DELEGATION_MAP[self.lawTitle] ?? [];
+  for (const title of direct) {
+    titles.add(title);
+  }
+
+  for (const [baseTitle, delegatedTitles] of Object.entries(LAW_DELEGATION_MAP)) {
+    if (delegatedTitles.includes(self.lawTitle)) {
+      titles.add(baseTitle);
+      for (const title of delegatedTitles) {
+        if (title !== self.lawTitle) {
+          titles.add(title);
+        }
+      }
+    }
+  }
+
+  titles.delete(self.lawTitle);
+
+  return Array.from(titles)
+    .map((title) => {
+      const delegatedLawId = LAW_ID_MAP[title];
+      if (!delegatedLawId) {
+        return null;
+      }
+      return {
+        lawId: delegatedLawId,
+        lawTitle: title,
+        lawType: inferLawType(title),
+        sourceUrl: `https://laws.e-gov.go.jp/law/${delegatedLawId}`,
+        aliases: LAW_ALIASES_BY_TITLE.get(title) ?? [],
+      } satisfies LawRegistryCandidate;
+    })
+    .filter((candidate): candidate is LawRegistryCandidate => candidate !== null)
+    .sort((a, b) => a.lawTitle.localeCompare(b.lawTitle, 'ja-JP'));
+}
+
+function inferDelegatedTitles(lawTitle: string): string[] {
+  const titles = new Set<string>();
+
+  if (lawTitle.endsWith('法')) {
+    const candidates = [
+      `${lawTitle}施行令`,
+      `${lawTitle}施行規則`,
+      lawTitle.replace(/法$/, '法施行令'),
+      lawTitle.replace(/法$/, '法施行規則'),
+      lawTitle.replace(/法$/, '規則'),
+    ];
+    for (const candidate of candidates) {
+      if (LAW_ID_MAP[candidate]) {
+        titles.add(candidate);
+      }
+    }
+  }
+
+  if (lawTitle.endsWith('施行令')) {
+    const baseTitle = lawTitle.replace(/施行令$/, '');
+    if (LAW_ID_MAP[baseTitle]) {
+      titles.add(baseTitle);
+    }
+    const siblingRule = `${baseTitle}施行規則`;
+    const siblingRegulation = `${baseTitle.replace(/法$/, '')}規則`;
+    if (LAW_ID_MAP[siblingRule]) {
+      titles.add(siblingRule);
+    }
+    if (LAW_ID_MAP[siblingRegulation]) {
+      titles.add(siblingRegulation);
+    }
+  }
+
+  if (lawTitle.endsWith('施行規則') || lawTitle.endsWith('規則')) {
+    const baseTitle = lawTitle.endsWith('施行規則')
+      ? lawTitle.replace(/施行規則$/, '')
+      : lawTitle.replace(/規則$/, '法');
+    if (LAW_ID_MAP[baseTitle]) {
+      titles.add(baseTitle);
+    }
+    const siblingOrder = `${baseTitle}施行令`;
+    if (LAW_ID_MAP[siblingOrder]) {
+      titles.add(siblingOrder);
+    }
+  }
+
+  titles.delete(lawTitle);
+  return Array.from(titles);
 }
