@@ -23,6 +23,9 @@ export interface EvidenceRecord {
   };
   date?: string;
   number?: string;
+  relevance_score?: number;
+  matched_keywords?: string[];
+  relevance_reason?: string;
 }
 
 export interface EvidenceBundleResult {
@@ -78,7 +81,11 @@ export async function getEvidenceBundle(params: {
     article: params.article,
     articleCaption: primary.articleCaption,
   });
-  const keywords = normalizeKeywords(params.relatedKeywords, related.searchKeywords);
+  const inferredKeywords = [
+    ...related.searchKeywords,
+    ...extractKeywordCandidates(primaryBody),
+  ];
+  const keywords = normalizeKeywords(params.relatedKeywords, inferredKeywords);
   const warnings: WarningMessage[] = [...related.warnings];
   const partialFailures: PartialFailure[] = [];
   const delegatedEvidence: EvidenceRecord[] = [];
@@ -104,18 +111,22 @@ export async function getEvidenceBundle(params: {
     warnings.push(...mhlw.warnings);
     partialFailures.push(...mhlw.partialFailures);
     relatedTsutatsu.push(
-      ...mhlw.results.slice(0, params.mhlwLimit ?? 5).map((result) => ({
-        source_type: 'mhlw' as const,
-        canonical_id: buildMhlwDocumentCanonicalId(result.dataId),
-        title: result.title,
-        source_url: `https://www.mhlw.go.jp/web/t_doc?dataId=${result.dataId}&dataType=1&pageNo=1`,
-        retrieved_at: retrievedAt,
-        warnings: [...mhlw.warnings],
-        version_info: joinVersionInfo([result.date, result.shubetsu]),
-        upstream_hash: computeUpstreamHash([result.dataId, result.title, result.date, result.shubetsu]),
-        date: result.date,
-        number: result.shubetsu,
-      }))
+      ...mhlw.results.slice(0, params.mhlwLimit ?? 5).map((result) =>
+        buildRelatedTsutatsuCandidate({
+          sourceType: 'mhlw',
+          canonicalId: buildMhlwDocumentCanonicalId(result.dataId),
+          title: result.title,
+          sourceUrl: `https://www.mhlw.go.jp/web/t_doc?dataId=${result.dataId}&dataType=1&pageNo=1`,
+          retrievedAt,
+          warnings: [...mhlw.warnings],
+          versionInfo: joinVersionInfo([result.date, result.shubetsu]),
+          upstreamHash: computeUpstreamHash([result.dataId, result.title, result.date, result.shubetsu]),
+          date: result.date,
+          number: result.shubetsu,
+          scoringText: `${result.title} ${result.shubetsu} ${result.date}`,
+          keywords,
+        })
+      )
     );
 
     if (params.includeJaish !== false) {
@@ -127,23 +138,29 @@ export async function getEvidenceBundle(params: {
       warnings.push(...jaish.warnings);
       partialFailures.push(...jaish.failedPages);
       relatedTsutatsu.push(
-        ...jaish.results.map((result) => ({
-          source_type: 'jaish' as const,
-          canonical_id: buildJaishCanonicalId(result.url),
-          title: result.title,
-          source_url: result.url.startsWith('http') ? result.url : `https://www.jaish.gr.jp${result.url}`,
-          retrieved_at: retrievedAt,
-          warnings: [...jaish.warnings],
-          version_info: joinVersionInfo([result.date, result.number]),
-          upstream_hash: computeUpstreamHash([result.url, result.title, result.date, result.number]),
-          date: result.date,
-          number: result.number,
-        }))
+        ...jaish.results.map((result) =>
+          buildRelatedTsutatsuCandidate({
+            sourceType: 'jaish',
+            canonicalId: buildJaishCanonicalId(result.url),
+            title: result.title,
+            sourceUrl: result.url.startsWith('http') ? result.url : `https://www.jaish.gr.jp${result.url}`,
+            retrievedAt,
+            warnings: [...jaish.warnings],
+            versionInfo: joinVersionInfo([result.date, result.number]),
+            upstreamHash: computeUpstreamHash([result.url, result.title, result.date, result.number]),
+            date: result.date,
+            number: result.number,
+            scoringText: `${result.title} ${result.number} ${result.date}`,
+            keywords,
+          })
+        )
       );
     }
   }
 
-  const dedupedRelated = dedupeEvidenceRecords(relatedTsutatsu).slice(0, 10);
+  const dedupedRelated = dedupeEvidenceRecords(relatedTsutatsu)
+    .sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0))
+    .slice(0, 10);
   const status = partialFailures.length > 0 || warnings.some((warning) => warning.code !== 'DELEGATED_EVIDENCE_NOT_IMPLEMENTED')
     ? 'partial'
     : 'ok';
@@ -173,6 +190,31 @@ function normalizeKeywords(explicitKeywords: string[] | undefined, inferredKeywo
     : inferredKeywords;
 
   return Array.from(new Set(seed.map((value) => value.trim()).filter(Boolean))).slice(0, 3);
+}
+
+function extractKeywordCandidates(text: string): string[] {
+  const compact = text.replace(/\s+/g, '');
+  const rawMatches = compact.match(/[一-龠々]{2,8}/g) ?? [];
+  const stopwords = new Set([
+    '労働者', '使用者', '事業者', '場合', '事項', '政令', '厚生労働省令',
+    '命令', '必要', '定める', '行う', '関する', '及び', '又は', 'その他',
+  ]);
+
+  const keywords: string[] = [];
+  for (const match of rawMatches) {
+    if (stopwords.has(match)) {
+      continue;
+    }
+    if (keywords.includes(match)) {
+      continue;
+    }
+    keywords.push(match);
+    if (keywords.length >= 3) {
+      break;
+    }
+  }
+
+  return keywords;
 }
 
 function dedupeWarnings(warnings: WarningMessage[]): WarningMessage[] {
@@ -208,4 +250,64 @@ function dedupeEvidenceRecords(records: EvidenceRecord[]): EvidenceRecord[] {
     seen.add(record.canonical_id);
     return true;
   });
+}
+
+function buildRelatedTsutatsuCandidate(params: {
+  sourceType: 'mhlw' | 'jaish';
+  canonicalId: string;
+  title: string;
+  sourceUrl: string;
+  retrievedAt: string;
+  warnings: WarningMessage[];
+  versionInfo?: string;
+  upstreamHash: string;
+  date?: string;
+  number?: string;
+  scoringText: string;
+  keywords: string[];
+}): EvidenceRecord {
+  const score = computeRelevanceScore(params.scoringText, params.keywords, params.sourceType);
+  const matchedKeywords = params.keywords.filter((keyword) => params.scoringText.includes(keyword));
+
+  return {
+    source_type: params.sourceType,
+    canonical_id: params.canonicalId,
+    title: params.title,
+    source_url: params.sourceUrl,
+    retrieved_at: params.retrievedAt,
+    warnings: params.warnings,
+    version_info: params.versionInfo,
+    upstream_hash: params.upstreamHash,
+    date: params.date,
+    number: params.number,
+    relevance_score: score,
+    matched_keywords: matchedKeywords,
+    relevance_reason: describeRelevance(params.sourceType, matchedKeywords, score),
+  };
+}
+
+function computeRelevanceScore(
+  scoringText: string,
+  keywords: string[],
+  sourceType: 'mhlw' | 'jaish',
+): number {
+  let score = sourceType === 'jaish' ? 0.45 : 0.4;
+  for (const keyword of keywords) {
+    if (scoringText.includes(keyword)) {
+      score += 0.2;
+    }
+  }
+  return Number(Math.min(0.99, score).toFixed(2));
+}
+
+function describeRelevance(
+  sourceType: 'mhlw' | 'jaish',
+  matchedKeywords: string[],
+  score: number,
+): string {
+  const sourceLabel = sourceType === 'jaish' ? 'JAISH 安衛通達検索' : '厚労省通達検索';
+  if (matchedKeywords.length === 0) {
+    return `${sourceLabel} の候補。明示キーワード一致は弱いが、関連検索結果に含まれたため採用。score=${score}`;
+  }
+  return `${sourceLabel} で ${matchedKeywords.join('、')} に一致。score=${score}`;
 }

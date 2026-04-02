@@ -36,7 +36,21 @@ describe('get_evidence_bundle tool', () => {
         },
       },
       delegated_evidence: [],
-      related_tsutatsu: [],
+      related_tsutatsu: [{
+        source_type: 'mhlw',
+        canonical_id: 'mhlw:00tb2035',
+        title: '労働時間の適正把握について',
+        source_url: 'https://www.mhlw.go.jp/web/t_doc?dataId=00tb2035&dataType=1&pageNo=1',
+        retrieved_at: '2026-04-02T10:00:00.000Z',
+        warnings: [],
+        version_info: '2024-01-01 / 基発0101第1号',
+        upstream_hash: 'b'.repeat(64),
+        date: '2024-01-01',
+        number: '基発0101第1号',
+        relevance_score: 0.8,
+        matched_keywords: ['労働時間'],
+        relevance_reason: '厚労省通達検索 で 労働時間 に一致。score=0.8',
+      }],
       warnings: [{ code: 'DELEGATED_EVIDENCE_NOT_IMPLEMENTED', message: '未実装' }],
       partial_failures: [{ source: 'mhlw', target: 'page:0', reason: 'timeout' }],
       search_keywords: ['労働時間'],
@@ -53,5 +67,6 @@ describe('get_evidence_bundle tool', () => {
     expect(result.structuredContent.status).toBe('partial');
     expect(result.structuredContent.data?.primary_evidence.canonical_id).toBe('egov:322AC0000000049:article:32');
     expect(result.structuredContent.data?.partial_failures[0]?.source).toBe('mhlw');
+    expect(result.structuredContent.data?.related_tsutatsu[0]?.relevance_score).toBe(0.8);
   });
 });

@@ -44,6 +44,9 @@ const evidenceSchema = z.object({
   }).optional(),
   date: z.string().optional(),
   number: z.string().optional(),
+  relevance_score: z.number().optional(),
+  matched_keywords: z.array(z.string()).optional(),
+  relevance_reason: z.string().optional(),
 });
 
 const outputSchema = createToolEnvelopeSchema(
@@ -104,7 +107,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
         };
 
         const relatedLines = result.related_tsutatsu.map((evidence, index) =>
-          `${index + 1}. [${evidence.source_type}] ${evidence.title}\n   ${evidence.date ?? ''} ${evidence.number ?? ''}`.trim()
+          `${index + 1}. [${evidence.source_type}] ${evidence.title}\n   ${evidence.date ?? ''} ${evidence.number ?? ''}\n   score=${evidence.relevance_score ?? '-'} reason=${evidence.relevance_reason ?? '-'}`.trim()
         );
         const warningSection = result.warnings.length > 0
           ? `\n\n警告:\n${result.warnings.map((warning) => `- [${warning.code}] ${warning.message}`).join('\n')}`

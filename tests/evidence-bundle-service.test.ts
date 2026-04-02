@@ -88,6 +88,9 @@ describe('getEvidenceBundle', () => {
     expect(result.delegated_evidence[0]?.canonical_id).toBe('egov:322CO0000000300:toc');
     expect(result.related_tsutatsu[0]?.canonical_id).toBe('mhlw:00tb2035');
     expect(result.delegated_evidence).toHaveLength(1);
+    expect(result.related_tsutatsu[0]?.matched_keywords).toContain('労働時間');
+    expect(result.related_tsutatsu[0]?.relevance_score).toBeGreaterThan(0.5);
+    expect(result.related_tsutatsu[0]?.relevance_reason).toContain('労働時間');
   });
 
   it('partial failure があれば partial を返す', async () => {
@@ -147,5 +150,49 @@ describe('getEvidenceBundle', () => {
     expect(result.partial_failures).toHaveLength(2);
     expect(result.warnings[0]?.code).toBe('NO_DELEGATED_LAWS_CONFIGURED');
     expect(result.related_tsutatsu[0]?.canonical_id).toBe('jaish:/anzen/example.htm');
+    expect(result.related_tsutatsu[0]?.relevance_reason).toContain('足場');
+  });
+
+  it('明示キーワードがなければ本文から補助キーワードを生成する', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '347AC0000000057',
+      lawTitle: '労働安全衛生法',
+      lawNum: '昭和四十七年法律第五十七号',
+      promulgationDate: '1972-06-08',
+      article: '59',
+      articleCaption: '',
+      text: '事業者は、危険防止のため、安全教育を行わなければならない。',
+      egovUrl: 'https://laws.e-gov.go.jp/law/347AC0000000057',
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '347AC0000000057',
+      lawTitle: '労働安全衛生法',
+      delegatedLaws: [],
+      searchKeywords: ['労働安全衛生法 59'],
+      warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [],
+      totalCount: 0,
+      page: 0,
+      partialFailures: [],
+      warnings: [],
+    });
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [],
+      pagesSearched: 1,
+      failedPages: [],
+      warnings: [],
+    });
+
+    const result = await getEvidenceBundle({
+      lawId: '347AC0000000057',
+      article: '59',
+    });
+
+    expect(result.search_keywords).toContain('危険防止');
+    expect(result.search_keywords).toContain('安全教育');
   });
 });
