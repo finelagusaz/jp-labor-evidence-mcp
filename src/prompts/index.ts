@@ -52,11 +52,9 @@ ${args.topic}
 3. **関連通達の検索**（並行して実行）
    - search_mhlw_tsutatsu でテーマに関連する厚労省通達を検索
    - 安全衛生関連の場合は search_jaish_tsutatsu も併用
-   - WebSearchで関連する通達・判例の番号や名称も検索
 
 4. **通達本文の確認**
    - get_mhlw_tsutatsu または get_jaish_tsutatsu で重要な通達の本文を取得
-   - 本サーバーのツールで見つからない場合は、WebSearchで通達名・番号を特定して再検索
 
 5. **調査結果のまとめ**
    - 根拠法令・条文の一覧
@@ -104,8 +102,6 @@ function registerTsutatsuResearchPrompt(server: McpServer) {
         steps.push(`- search_jaish_tsutatsu で「${args.keyword}」を検索（安全衛生関連）`);
         steps.push('- 重要な通達は get_jaish_tsutatsu で本文を取得');
       }
-      steps.push(`- WebSearchで「${args.keyword}」に関連する通達名・番号も並行検索`);
-      steps.push('- 本サーバーのツールで見つからない場合は、WebSearchで特定した情報で再検索');
 
       return {
         messages: [
@@ -172,14 +168,12 @@ ${args.topic}
 2. **JAISH安衛通達の検索**（並行して実行）
    - search_jaish_tsutatsu でテーマに関連する安衛通達を検索
    - max_pages を増やして古い通達も網羅的に検索
-   - WebSearchで関連する通達名・番号も並行検索
 
 3. **厚労省通達の検索**
    - search_mhlw_tsutatsu で関連する厚労省通達も検索（安衛関連の基発通達等）
 
 4. **重要通達の本文確認**
    - get_jaish_tsutatsu / get_mhlw_tsutatsu で重要な通達の詳細を取得
-   - 本サーバーのツールで見つからない場合は、WebSearchで特定した情報で再検索
 
 5. **調査結果のまとめ**
    - 法的根拠（安衛法・安衛則の条文）

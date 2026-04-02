@@ -1,0 +1,70 @@
+{
+  "law_info": {
+    "law_id": "322AC0000000049",
+    "law_type": "Act",
+    "law_num": "昭和二十二年法律第四十九号",
+    "promulgation_date": "1947-04-07"
+  },
+  "law_full_text": {
+    "tag": "Law",
+    "children": [
+      {
+        "tag": "LawTitle",
+        "children": ["労働基準法"]
+      },
+      {
+        "tag": "MainProvision",
+        "children": [
+          {
+            "tag": "Article",
+            "attr": {
+              "Num": "32"
+            },
+            "children": [
+              {
+                "tag": "ArticleCaption",
+                "children": ["労働時間"]
+              },
+              {
+                "tag": "ArticleTitle",
+                "children": ["第三十二条"]
+              },
+              {
+                "tag": "Paragraph",
+                "attr": {
+                  "Num": "1"
+                },
+                "children": [
+                  {
+                    "tag": "ParagraphNum",
+                    "children": ["１"]
+                  },
+                  {
+                    "tag": "ParagraphSentence",
+                    "children": ["使用者は、労働者に、休憩時間を除き一週間について四十時間を超えて、労働させてはならない。"]
+                  }
+                ]
+              },
+              {
+                "tag": "Paragraph",
+                "attr": {
+                  "Num": "2"
+                },
+                "children": [
+                  {
+                    "tag": "ParagraphNum",
+                    "children": ["２"]
+                  },
+                  {
+                    "tag": "ParagraphSentence",
+                    "children": ["使用者は、一週間の各日については、労働者に、休憩時間を除き一日について八時間を超えて、労働させてはならない。"]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

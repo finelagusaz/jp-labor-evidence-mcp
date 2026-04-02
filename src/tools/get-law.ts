@@ -7,16 +7,16 @@ export function registerGetLawTool(server: McpServer) {
     'get_law',
     '日本の法令から特定の条文を取得する。e-Gov法令API v2を使用。略称にも対応（労基法→労働基準法、安衛法→労働安全衛生法 等）。',
     {
-      law_name: z.string().describe(
+      law_name: z.string().min(1).max(200).describe(
         '法令名または略称。例: "労働基準法", "労働安全衛生法", "雇用保険法", "健康保険法", "労基法", "安衛法", "派遣法", "育介法"'
       ),
-      article: z.string().optional().describe(
+      article: z.string().min(1).max(20).optional().describe(
         '条文番号（format="toc"の場合は省略可）。例: "32", "36", "32の2", "第36条"'
       ),
-      paragraph: z.number().optional().describe(
+      paragraph: z.number().int().positive().max(99).optional().describe(
         '項番号（省略時は条文全体）。例: 1, 2'
       ),
-      item: z.number().optional().describe(
+      item: z.number().int().positive().max(999).optional().describe(
         '号番号（省略時は項全体）。例: 1, 2'
       ),
       format: z.enum(['markdown', 'toc']).optional().describe(

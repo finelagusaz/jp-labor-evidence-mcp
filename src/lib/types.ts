@@ -88,3 +88,14 @@ export interface JaishDocument {
   /** ソースURL */
   url: string;
 }
+
+export interface PartialFailure {
+  source: string;
+  target: string;
+  reason: string;
+}
+
+export interface WarningMessage {
+  code: string;
+  message: string;
+}

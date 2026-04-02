@@ -4,9 +4,11 @@
  */
 
 import { mhlwSearchCache, mhlwDocCache } from './cache.js';
+import { ValidationError } from './errors.js';
 
 const BASE_URL = 'https://www.mhlw.go.jp/web';
 const REQUEST_DELAY_MS = 200;
+const MAX_CACHEABLE_HTML_CHARS = 500_000;
 
 let lastRequestTime = 0;
 
@@ -43,22 +45,28 @@ async function throttledFetch(url: string): Promise<string> {
  * @param page ページ番号（0始まり）
  */
 export async function fetchMhlwSearch(keyword: string, page = 0): Promise<string> {
-  if (!keyword.trim()) {
-    throw new Error('検索キーワードが空です');
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) {
+    throw new ValidationError('検索キーワードが空です');
   }
-  const cacheKey = `search:${keyword}:${page}`;
+  if (!Number.isInteger(page) || page < 0 || page > 999) {
+    throw new ValidationError(`不正なページ番号です: ${page}`);
+  }
+  const cacheKey = `search:${normalizedKeyword}:${page}`;
   const cached = mhlwSearchCache.get(cacheKey);
   if (cached) return cached;
 
   const params = new URLSearchParams({
-    keyword,
+    keyword: normalizedKeyword,
     type: '1',
     mode: '0',
     page: String(page),
   });
   const url = `${BASE_URL}/t_docsrch_keyword?${params}`;
   const html = await throttledFetch(url);
-  mhlwSearchCache.set(cacheKey, html);
+  if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
+    mhlwSearchCache.set(cacheKey, html);
+  }
   return html;
 }
 
@@ -68,22 +76,28 @@ export async function fetchMhlwSearch(keyword: string, page = 0): Promise<string
  * @param pageNo ページ番号（デフォルト1）
  */
 export async function fetchMhlwDocument(dataId: string, pageNo = 1): Promise<string> {
+  const normalizedDataId = dataId.trim();
   // dataIdの形式バリデーション（英数字・ハイフン・アンダースコアのみ許可）
-  if (!/^[\w-]+$/.test(dataId)) {
-    throw new Error(`不正なdataIdです: "${dataId}"`);
+  if (!/^[\w-]{1,64}$/.test(normalizedDataId)) {
+    throw new ValidationError(`不正なdataIdです: "${dataId}"`);
   }
-  const cacheKey = `doc:${dataId}:${pageNo}`;
+  if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 999) {
+    throw new ValidationError(`不正なページ番号です: ${pageNo}`);
+  }
+  const cacheKey = `doc:${normalizedDataId}:${pageNo}`;
   const cached = mhlwDocCache.get(cacheKey);
   if (cached) return cached;
 
   const params = new URLSearchParams({
-    dataId,
+    dataId: normalizedDataId,
     dataType: '1',
     pageNo: String(pageNo),
   });
   const url = `${BASE_URL}/t_doc?${params}`;
   const html = await throttledFetch(url);
-  mhlwDocCache.set(cacheKey, html);
+  if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
+    mhlwDocCache.set(cacheKey, html);
+  }
   return html;
 }
 

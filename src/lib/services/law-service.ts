@@ -5,7 +5,7 @@
 
 import { fetchLawData, searchLaws, getEgovUrl } from '../egov-client.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
-import { NotFoundError } from '../errors.js';
+import { NotFoundError, ValidationError } from '../errors.js';
 import type { EgovLawSearchResult } from '../types.js';
 
 export interface GetLawArticleResult {
@@ -44,6 +44,13 @@ export async function getLawArticle(params: {
   paragraph?: number;
   item?: number;
 }): Promise<GetLawArticleResult> {
+  if (!params.lawName.trim()) {
+    throw new ValidationError('法令名または law_id を指定してください。');
+  }
+  if (!params.article.trim()) {
+    throw new ValidationError('条文番号を指定してください。');
+  }
+
   const { data, lawId, lawTitle } = await fetchLawData(params.lawName);
   const egovUrl = getEgovUrl(lawId);
 
@@ -73,6 +80,10 @@ export async function getLawArticle(params: {
 export async function getLawToc(params: {
   lawName: string;
 }): Promise<GetLawTocResult> {
+  if (!params.lawName.trim()) {
+    throw new ValidationError('法令名または law_id を指定してください。');
+  }
+
   const { data, lawId, lawTitle } = await fetchLawData(params.lawName);
   const egovUrl = getEgovUrl(lawId);
   const toc = extractToc(data);
@@ -88,6 +99,10 @@ export async function searchLaw(params: {
   lawType?: string;
   limit?: number;
 }): Promise<SearchLawResult> {
+  if (!params.keyword.trim()) {
+    throw new ValidationError('検索キーワードを指定してください。');
+  }
+
   const limit = Math.min(params.limit ?? 10, 20);
   const results = await searchLaws(params.keyword, limit, params.lawType);
 

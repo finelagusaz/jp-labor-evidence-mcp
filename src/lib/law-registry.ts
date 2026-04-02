@@ -132,15 +132,21 @@ export const LAW_ALIAS_MAP: Record<string, string> = {
 };
 
 /**
- * 法令名を正規化する
- * 略称 → 正式名称に変換し、law_id を返す
+ * e-Gov law_id 形式かどうかを判定する
  */
-export function resolveLawName(input: string): { name: string; lawId: string | null } {
-  // 略称チェック
-  const alias = LAW_ALIAS_MAP[input];
-  const normalizedName = alias ?? input;
+export function isEgovLawId(input: string): boolean {
+  return /^\d{3}[A-Z]{2}\d{10}$/.test(input);
+}
 
-  // law_id 検索
+/**
+ * 法令名を厳密に正規化する
+ * 略称 → 正式名称に変換し、既知の law_id を返す
+ */
+export function resolveLawNameStrict(input: string): { name: string; lawId: string | null } {
+  const trimmed = input.trim();
+  const alias = LAW_ALIAS_MAP[trimmed];
+  const normalizedName = alias ?? trimmed;
+
   const lawId = LAW_ID_MAP[normalizedName] ?? null;
 
   return { name: normalizedName, lawId };

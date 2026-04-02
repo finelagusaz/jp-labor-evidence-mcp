@@ -7,9 +7,11 @@
  */
 
 import { jaishIndexCache, jaishPageCache } from './cache.js';
+import { ValidationError } from './errors.js';
 
 const BASE_URL = 'https://www.jaish.gr.jp';
 const REQUEST_DELAY_MS = 300;
+const MAX_CACHEABLE_HTML_CHARS = 500_000;
 
 let lastRequestTime = 0;
 
@@ -79,13 +81,19 @@ function decodeShiftJIS(buf: ArrayBuffer): string {
  * インデックスページを取得する（24hキャッシュ）
  */
 export async function fetchJaishIndex(path: string): Promise<string> {
+  if (!JAISH_INDEX_PAGES.includes(path)) {
+    throw new ValidationError(`不正なJAISH年度インデックスです: ${path}`);
+  }
+
   const cached = jaishIndexCache.get(path);
   if (cached) return cached;
 
   const url = `${BASE_URL}${path}`;
   const buf = await throttledFetch(url);
   const html = decodeShiftJIS(buf);
-  jaishIndexCache.set(path, html);
+  if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
+    jaishIndexCache.set(path, html);
+  }
   return html;
 }
 
@@ -95,12 +103,17 @@ const ALLOWED_PATH_PREFIXES = ['/anzen/', '/horei/', '/user/'];
 /**
  * パスを検証してJAISH配下のみ許可する（SSRF防止）
  */
-function validateJaishPath(input: string): string {
-  const path = input.startsWith('http')
+export function validateJaishPath(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new ValidationError('JAISH のパスまたは URL を指定してください。');
+  }
+
+  const path = trimmed.startsWith('http')
     ? new URL(input).pathname
-    : input;
+    : trimmed;
   if (!ALLOWED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))) {
-    throw new Error(`不正なパスです。JAISH配下のパスを指定してください: ${input}`);
+    throw new ValidationError(`不正なパスです。JAISH配下のパスを指定してください: ${input}`);
   }
   return path;
 }
@@ -118,7 +131,9 @@ export async function fetchJaishPage(path: string): Promise<string> {
   const url = `${BASE_URL}${safePath}`;
   const buf = await throttledFetch(url);
   const html = decodeShiftJIS(buf);
-  jaishPageCache.set(safePath, html);
+  if (html.length <= MAX_CACHEABLE_HTML_CHARS) {
+    jaishPageCache.set(safePath, html);
+  }
   return html;
 }
 

@@ -1,0 +1,27 @@
+import { describe, expect, it } from 'vitest';
+import { TTLCache } from '../src/lib/cache.js';
+
+describe('TTLCache', () => {
+  it('maxEntries を超えたら古いキーから eviction する', () => {
+    const cache = new TTLCache<string>(60_000, 2);
+
+    cache.set('a', '1');
+    cache.set('b', '2');
+    cache.set('c', '3');
+
+    expect(cache.size).toBe(2);
+    expect(cache.get('a')).toBeUndefined();
+    expect(cache.get('b')).toBe('2');
+    expect(cache.get('c')).toBe('3');
+  });
+
+  it('同一キーの再設定で size が増えない', () => {
+    const cache = new TTLCache<string>(60_000, 2);
+
+    cache.set('a', '1');
+    cache.set('a', '2');
+
+    expect(cache.size).toBe(1);
+    expect(cache.get('a')).toBe('2');
+  });
+});

@@ -7,11 +7,13 @@
 
 import { lawDataCache, lawSearchCache } from './cache.js';
 import type { EgovLawSearchResult, EgovLawData } from './types.js';
-import { resolveLawName } from './law-registry.js';
+import { isEgovLawId, resolveLawNameStrict } from './law-registry.js';
 import { extractLawTitle } from './egov-parser.js';
+import { ValidationError } from './errors.js';
 
 const EGOV_API_BASE = 'https://laws.e-gov.go.jp/api/2';
 const MIN_REQUEST_INTERVAL_MS = 200; // 5 req/sec (takurot版参考)
+const MAX_CACHEABLE_JSON_CHARS = 500_000;
 
 let lastRequestTime = 0;
 
@@ -33,29 +35,32 @@ export async function fetchLawData(lawNameOrId: string): Promise<{
   lawId: string;
   lawTitle: string;
 }> {
-  // law_idを解決
-  let lawId: string;
-  const { name, lawId: resolvedId } = resolveLawName(lawNameOrId);
+  const trimmed = lawNameOrId.trim();
+  if (!trimmed) {
+    throw new ValidationError('法令名または law_id を指定してください。');
+  }
 
-  if (resolvedId) {
-    lawId = resolvedId;
-  } else if (/^\d{3}[A-Z]{2}\d{10}$/.test(lawNameOrId)) {
-    // e-Gov law_id形式（例: 322AC0000000049）ならそのまま使用
-    lawId = lawNameOrId;
+  let lawId: string;
+  let lawTitleHint: string | null = null;
+
+  if (isEgovLawId(trimmed)) {
+    lawId = trimmed;
   } else {
-    // 名前で検索してlaw_idを取得
-    const results = await searchLaws(name, 1);
-    if (results.length === 0) {
-      throw new Error(`法令が見つかりません: "${name}"`);
+    const { name, lawId: resolvedId } = resolveLawNameStrict(trimmed);
+    if (!resolvedId) {
+      throw new ValidationError(
+        `法令名を厳密に特定できませんでした: "${trimmed}"。search_law で候補を確認し、正式名称または law_id を指定してください。`
+      );
     }
-    lawId = results[0].law_info.law_id;
+    lawId = resolvedId;
+    lawTitleHint = name;
   }
 
   // キャッシュチェック
   const cached = lawDataCache.get(lawId);
   if (cached) {
     const data = JSON.parse(cached) as EgovLawData;
-    return { data, lawId, lawTitle: extractLawTitle(data) };
+    return { data, lawId, lawTitle: extractLawTitle(data) || lawTitleHint || lawId };
   }
 
   // e-Gov API v2 から取得
@@ -93,9 +98,12 @@ export async function fetchLawData(lawNameOrId: string): Promise<{
   const data = json as EgovLawData;
 
   // キャッシュに保存
-  lawDataCache.set(lawId, JSON.stringify(data));
+  const serialized = JSON.stringify(data);
+  if (serialized.length <= MAX_CACHEABLE_JSON_CHARS) {
+    lawDataCache.set(lawId, serialized);
+  }
 
-  return { data, lawId, lawTitle: extractLawTitle(data) };
+  return { data, lawId, lawTitle: extractLawTitle(data) || lawTitleHint || lawId };
 }
 
 /**
@@ -106,15 +114,21 @@ export async function searchLaws(
   limit: number = 10,
   lawType?: string
 ): Promise<EgovLawSearchResult[]> {
-  const cacheKey = `${keyword}|${limit}|${lawType ?? ''}`;
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) {
+    throw new ValidationError('検索キーワードが空です。');
+  }
+
+  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 20);
+  const cacheKey = `${normalizedKeyword}|${safeLimit}|${lawType ?? ''}`;
   const cached = lawSearchCache.get(cacheKey);
   if (cached) {
     return JSON.parse(cached);
   }
 
   const params = new URLSearchParams({
-    law_title: keyword,
-    limit: String(limit),
+    law_title: normalizedKeyword,
+    limit: String(safeLimit),
     response_format: 'json',
   });
   if (lawType) {
@@ -137,7 +151,7 @@ export async function searchLaws(
     });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`e-Gov API 検索タイムアウト: "${keyword}"`);
+      throw new Error(`e-Gov API 検索タイムアウト: "${normalizedKeyword}"`);
     }
     throw err;
   } finally {
@@ -151,7 +165,10 @@ export async function searchLaws(
   const json = await res.json();
   const results = (json.laws ?? []) as EgovLawSearchResult[];
 
-  lawSearchCache.set(cacheKey, JSON.stringify(results));
+  const serialized = JSON.stringify(results);
+  if (serialized.length <= MAX_CACHEABLE_JSON_CHARS) {
+    lawSearchCache.set(cacheKey, serialized);
+  }
 
   return results;
 }

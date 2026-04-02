@@ -7,10 +7,10 @@ export function registerGetMhlwTsutatsuTool(server: McpServer) {
     'get_mhlw_tsutatsu',
     '厚生労働省の通達本文を取得する。search_mhlw_tsutatsu で取得した data_id を指定。',
     {
-      data_id: z.string().describe(
+      data_id: z.string().min(1).max(64).describe(
         '通達のdataId。search_mhlw_tsutatsu の検索結果から取得。例: "00tb2035"'
       ),
-      page_no: z.number().optional().describe(
+      page_no: z.number().int().min(1).max(999).optional().describe(
         'ページ番号（デフォルト1）。長い通達は複数ページに分かれている場合がある。'
       ),
     },
