@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerGetArticleTool } from './tools/get-article.js';
 import { registerGetEvidenceBundleTool } from './tools/get-evidence-bundle.js';
+import { registerDiffRevisionTool } from './tools/diff-revision.js';
 import { registerFindRelatedSourcesTool } from './tools/find-related-sources.js';
 import { registerGetObservabilitySnapshotTool } from './tools/get-observability-snapshot.js';
 import { registerGetLawTool } from './tools/get-law.js';
@@ -44,6 +45,7 @@ export function createServer(): McpServer {
   registerGetArticleTool(server);   // get_article: law_id 指定で条文取得
   registerFindRelatedSourcesTool(server); // find_related_sources: 委任先法令と探索キーワード
   registerGetEvidenceBundleTool(server); // get_evidence_bundle: 条文 + 関連通達候補の束ね
+  registerDiffRevisionTool(server);  // diff_revision: 2 law_id 間の条文差分
   registerGetLawTool(server);       // get_law: 旧互換ツール（非推奨）
   registerSearchLawTool(server);    // search_law: 法令キーワード検索
 

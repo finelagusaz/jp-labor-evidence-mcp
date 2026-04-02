@@ -23,6 +23,7 @@ Claude などの上位クライアントが労務の質問に回答する際、*
 | `get_article` | e-Gov法令APIから条文を取得。確定済みの law_id + 条番号で指定 |
 | `find_related_sources` | 条文に関連しうる委任先法令候補と通達検索キーワードを返す |
 | `get_evidence_bundle` | 主条文、委任先法令、関連通達候補を束ねた evidence bundle を返す |
+| `diff_revision` | 2つの e-Gov law_id 上の同一条文を比較し、構造化 diff を返す |
 | `search_law` | キーワードで法令を検索 |
 | `search_mhlw_tsutatsu` | 厚労省法令等DBから通達をキーワード検索 |
 | `get_mhlw_tsutatsu` | 厚労省通達の本文を取得。data_idで指定 |
@@ -177,6 +178,20 @@ npm run build
 - `source_priority`: source 種別の優先度
 
 各候補には `matched_signals` と `relevance_reason` が含まれるため、なぜ上位に来たのかを追跡できます。
+
+### 条文改正差分の比較
+
+> 「この条文の改正前後を比較して」
+
+→ `diff_revision(base_law_id="322AC0000000049", head_law_id="322AC0000000049", article="32")`
+
+`diff_revision` は同じ条番号について、比較元と比較先の本文を `diff_chunks` として返します。
+
+- `equal`: 共通部分
+- `delete`: 比較元にのみ存在する部分
+- `insert`: 比較先にのみ存在する部分
+
+現時点では e-Gov 条文比較に限定しており、入力は 2 つの `law_id` を明示指定します。
 
 ### 一次情報取得ワークフロー
 
