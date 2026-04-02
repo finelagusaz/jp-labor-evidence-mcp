@@ -111,4 +111,64 @@ describe('HttpSourceAdapter', () => {
     await expect(adapter.getText('https://example.com/b')).rejects.toThrow('HTTP 503');
     await expect(adapter.getText('https://example.com/c')).rejects.toThrow('Circuit breaker is open');
   });
+
+  it('待機中のリクエストも circuit open 後は upstream に送らない', async () => {
+    let releaseFirst!: () => void;
+    const firstDone = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.endsWith('/first')) {
+        await firstDone;
+        return new Response('fail', { status: 503, statusText: 'Service Unavailable' });
+      }
+      return new Response('ok', { status: 200, statusText: 'OK' });
+    });
+
+    const adapter = new TestHttpAdapter({
+      baseUrl: 'https://example.com',
+      minIntervalMs: 0,
+      timeoutMs: 1_000,
+      userAgent: 'test-agent',
+      maxConcurrency: 1,
+      circuitBreakerThreshold: 1,
+      circuitBreakerResetMs: 10_000,
+    });
+
+    const first = adapter.getText('https://example.com/first');
+    const second = adapter.getText('https://example.com/second');
+    releaseFirst();
+
+    await expect(first).rejects.toThrow('HTTP 503');
+    await expect(second).rejects.toThrow('Circuit breaker is open');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('maxConcurrency > 1 でも rate limit を直列化する', async () => {
+    vi.useFakeTimers();
+    const callTimes: number[] = [];
+
+    vi.mocked(fetch).mockImplementation(async () => {
+      callTimes.push(Date.now());
+      return new Response('ok', { status: 200, statusText: 'OK' });
+    });
+
+    const adapter = new TestHttpAdapter({
+      baseUrl: 'https://example.com',
+      minIntervalMs: 100,
+      timeoutMs: 1_000,
+      userAgent: 'test-agent',
+      maxConcurrency: 2,
+    });
+
+    const p1 = adapter.getText('https://example.com/first');
+    const p2 = adapter.getText('https://example.com/second');
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(Promise.all([p1, p2])).resolves.toEqual(['ok', 'ok']);
+    expect(callTimes).toHaveLength(2);
+    expect(callTimes[1]! - callTimes[0]!).toBeGreaterThanOrEqual(100);
+  });
 });

@@ -13,6 +13,7 @@ export class HttpSourceAdapter {
   private readonly maxConcurrency: number;
   private readonly circuitBreakerThreshold: number;
   private readonly circuitBreakerResetMs: number;
+  private rateLimitQueue: Promise<void> = Promise.resolve();
   private inFlight = 0;
   private waiters: Array<() => void> = [];
   private consecutiveFailures = 0;
@@ -51,7 +52,9 @@ export class HttpSourceAdapter {
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
 
     try {
+      this.ensureCircuitClosed();
       await this.rateLimit();
+      this.ensureCircuitClosed();
       const response = await fetch(url, {
         ...init,
         signal: controller.signal,
@@ -75,12 +78,23 @@ export class HttpSourceAdapter {
   }
 
   private async rateLimit(): Promise<void> {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestTime;
-    if (elapsed < this.options.minIntervalMs) {
-      await new Promise((resolve) => setTimeout(resolve, this.options.minIntervalMs - elapsed));
+    const previous = this.rateLimitQueue;
+    let release!: () => void;
+    this.rateLimitQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+    try {
+      const now = Date.now();
+      const elapsed = now - this.lastRequestTime;
+      if (elapsed < this.options.minIntervalMs) {
+        await new Promise((resolve) => setTimeout(resolve, this.options.minIntervalMs - elapsed));
+      }
+      this.lastRequestTime = Date.now();
+    } finally {
+      release();
     }
-    this.lastRequestTime = Date.now();
   }
 
   private ensureCircuitClosed(): void {
