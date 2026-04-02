@@ -20,6 +20,8 @@ const searchMhlwOutputSchema = createToolEnvelopeSchema(
     total_count: z.number(),
     retrieved_at: z.string(),
     source_url: z.string(),
+    used_index: z.boolean(),
+    index_freshness: z.enum(['fresh', 'stale', 'unknown']).optional(),
     results: z.array(z.object({
       title: z.string(),
       date: z.string(),
@@ -61,6 +63,8 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
             total_count: result.totalCount,
             retrieved_at: retrievedAt,
             source_url: sourceUrl,
+            used_index: result.usedIndex,
+            index_freshness: result.indexMeta?.freshness,
             results: result.results.map((r) => ({
               title: r.title,
               date: r.date,

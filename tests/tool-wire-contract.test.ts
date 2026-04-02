@@ -35,6 +35,15 @@ describe('tool wire contract', () => {
 
     vi.mocked(searchLaw).mockResolvedValue({
       keyword: '労働基準',
+      usedIndex: true,
+      indexMeta: {
+        source: 'egov',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 45,
+      },
+      warnings: [],
       results: [{
         lawTitle: '労働基準法',
         lawId: '322AC0000000049',
@@ -48,6 +57,7 @@ describe('tool wire contract', () => {
 
     expect(result.structuredContent.status).toBe('ok');
     expect(result.structuredContent.data?.results[0]?.canonical_id).toBe('egov:322AC0000000049');
+    expect(result.structuredContent.data?.used_index).toBe(true);
     expect(result.content[0]?.type).toBe('text');
   });
 
@@ -58,6 +68,15 @@ describe('tool wire contract', () => {
     const [, , handler] = registerTool.mock.calls[0];
     vi.mocked(searchLaw).mockResolvedValue({
       keyword: '存在しない',
+      usedIndex: true,
+      indexMeta: {
+        source: 'egov',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 45,
+      },
+      warnings: [],
       results: [],
     });
 
@@ -79,6 +98,14 @@ describe('tool wire contract', () => {
       query: '労働',
       resolution: 'ambiguous',
       warnings: [],
+      usedIndex: true,
+      indexMeta: {
+        source: 'egov',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 45,
+      },
       candidates: [
         {
           lawId: '322AC0000000049',
@@ -102,6 +129,7 @@ describe('tool wire contract', () => {
     expect(result.structuredContent.status).toBe('partial');
     expect(result.structuredContent.data?.resolution).toBe('ambiguous');
     expect(result.structuredContent.data?.candidates[0]?.canonical_id).toBe('egov:322AC0000000049');
+    expect(result.structuredContent.data?.used_index).toBe(true);
     expect(result.isError).toBe(false);
   });
 

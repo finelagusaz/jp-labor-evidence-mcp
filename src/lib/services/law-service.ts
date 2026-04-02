@@ -7,8 +7,10 @@ import { fetchLawData, searchLaws, getEgovUrl } from '../egov-client.js';
 import { NormalizedCache } from '../cache.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
+import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
+import type { IndexSnapshotMeta } from '../indexes/types.js';
 import type { EgovLawSearchResult } from '../types.js';
-import { findDelegatedLawCandidates, resolveLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
+import { findDelegatedLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
 import type { WarningMessage } from '../types.js';
 
 export interface GetLawArticleResult {
@@ -42,6 +44,9 @@ export interface SearchLawResultItem {
 export interface SearchLawResult {
   keyword: string;
   results: SearchLawResultItem[];
+  usedIndex: boolean;
+  indexMeta?: IndexSnapshotMeta;
+  warnings: WarningMessage[];
 }
 
 export interface ResolveLawResult {
@@ -49,6 +54,8 @@ export interface ResolveLawResult {
   resolution: 'resolved' | 'ambiguous' | 'not_found';
   candidates: LawRegistryCandidate[];
   warnings: WarningMessage[];
+  usedIndex: boolean;
+  indexMeta?: IndexSnapshotMeta;
 }
 
 export interface FindRelatedSourcesResult {
@@ -176,6 +183,25 @@ export async function searchLaw(params: {
   if (cached) {
     return cached;
   }
+  const indexResults = searchEgovIndex(params.keyword, params.lawType, limit);
+  if (indexResults.length > 0) {
+    const payload = {
+      keyword: params.keyword,
+      results: indexResults.map((entry) => ({
+        lawTitle: entry.law_title,
+        lawId: entry.law_id,
+        lawNum: entry.law_num ?? '',
+        lawType: entry.law_type,
+        egovUrl: entry.source_url,
+      })),
+      usedIndex: true,
+      indexMeta: getEgovIndexMeta(),
+      warnings: [],
+    };
+    lawSearchNormalizedCache.set(cacheKey, payload);
+    return payload;
+  }
+
   const results = await searchLaws(params.keyword, limit, params.lawType);
 
   const payload = {
@@ -187,6 +213,12 @@ export async function searchLaw(params: {
       lawType: r.law_info.law_type,
       egovUrl: getEgovUrl(r.law_info.law_id),
     })),
+    usedIndex: false,
+    indexMeta: getEgovIndexMeta(),
+    warnings: [{
+      code: 'UPSTREAM_SEARCH_FALLBACK',
+      message: '内部 e-Gov 索引で候補が見つからなかったため、upstream 検索へフォールバックしました。',
+    }],
   };
   lawSearchNormalizedCache.set(cacheKey, payload);
   return payload;
@@ -200,18 +232,16 @@ export async function resolveLaw(params: {
     throw new ValidationError('法令名、略称、または law_id を指定してください。');
   }
 
-  const candidates = resolveLawCandidates(query);
-  const resolution =
-    candidates.length === 0 ? 'not_found' :
-    candidates.length === 1 ? 'resolved' :
-    'ambiguous';
+  const indexResult = resolveLawFromEgovIndex(query);
 
-  if (candidates.length > 0) {
+  if (indexResult.resolution !== 'not_found') {
     return {
       query,
-      resolution,
-      candidates,
+      resolution: indexResult.resolution,
+      candidates: indexResult.candidates,
       warnings: [],
+      usedIndex: true,
+      indexMeta: indexResult.meta,
     };
   }
 
@@ -249,6 +279,8 @@ export async function resolveLaw(params: {
         code: 'UPSTREAM_EXACT_MATCH',
         message: '内部 registry に未登録のため、e-Gov 検索結果の厳密一致から候補を補完しました。',
       }],
+      usedIndex: false,
+      indexMeta: getEgovIndexMeta(),
     };
   }
 
@@ -257,6 +289,8 @@ export async function resolveLaw(params: {
     resolution: 'not_found',
     candidates: [],
     warnings: [],
+    usedIndex: true,
+    indexMeta: getEgovIndexMeta(),
   };
 }
 

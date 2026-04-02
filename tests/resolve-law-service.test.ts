@@ -35,5 +35,15 @@ describe('resolveLaw service', () => {
     expect(result.resolution).toBe('resolved');
     expect(result.candidates[0]?.lawId).toBe('999AC0000000001');
     expect(result.warnings[0]?.code).toBe('UPSTREAM_EXACT_MATCH');
+    expect(result.usedIndex).toBe(false);
+  });
+
+  it('既知法令は内部索引で解決し upstream を呼ばない', async () => {
+    const result = await resolveLaw({ query: '労働基準法' });
+
+    expect(result.resolution).toBe('resolved');
+    expect(result.candidates[0]?.lawId).toBe('322AC0000000049');
+    expect(result.usedIndex).toBe(true);
+    expect(searchLaws).not.toHaveBeenCalled();
   });
 });

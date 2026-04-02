@@ -4,18 +4,22 @@
 
 import { fetchMhlwSearch, fetchMhlwDocument, getMhlwDocUrl } from '../mhlw-client.js';
 import { NormalizedCache } from '../cache.js';
+import { tsutatsuIndexRegistry } from '../indexes/tsutatsu-index.js';
+import type { IndexSnapshotMeta } from '../indexes/types.js';
 import { parseMhlwSearchResults, parseMhlwSearchCount, parseMhlwDocument } from '../mhlw-parser.js';
 import type { MhlwSearchResult, MhlwDocument, PartialFailure, WarningMessage } from '../types.js';
 import { ExternalApiError, ParseError, ValidationError } from '../errors.js';
 import { observabilityRegistry } from '../observability.js';
 
 export interface MhlwSearchResponse {
-  status: 'ok' | 'unavailable';
+  status: 'ok' | 'partial' | 'unavailable';
   results: MhlwSearchResult[];
   totalCount: number;
   page: number;
   partialFailures: PartialFailure[];
   warnings: WarningMessage[];
+  usedIndex: boolean;
+  indexMeta?: IndexSnapshotMeta;
 }
 
 const mhlwSearchNormalizedCache = new NormalizedCache<MhlwSearchResponse>('mhlw_search_result', {
@@ -41,6 +45,24 @@ export async function searchMhlwTsutatsu(opts: {
     throw new ValidationError('検索キーワードが空です');
   }
   const page = opts.page ?? 0;
+  const indexHit = tsutatsuIndexRegistry.search('mhlw', opts.keyword, 20);
+  if (indexHit.results.length > 0) {
+    return {
+      status: 'ok',
+      results: indexHit.results.map((entry) => ({
+        title: entry.title,
+        dataId: entry.canonical_id.replace(/^mhlw:/, ''),
+        date: entry.date ?? '',
+        shubetsu: entry.number ?? '',
+      })),
+      totalCount: indexHit.results.length,
+      page,
+      partialFailures: [],
+      warnings: [],
+      usedIndex: true,
+      indexMeta: indexHit.meta,
+    };
+  }
   const cacheKey = `${opts.keyword}|${page}`;
   const cached = mhlwSearchNormalizedCache.get(cacheKey);
   if (cached) {
@@ -55,6 +77,7 @@ export async function searchMhlwTsutatsu(opts: {
     }
 
     observabilityRegistry.recordPartialFailure('mhlw', 1);
+    tsutatsuIndexRegistry.recordFailure('mhlw');
 
     return {
       status: 'unavailable',
@@ -70,6 +93,8 @@ export async function searchMhlwTsutatsu(opts: {
         code: 'MHLW_SEARCH_UNAVAILABLE',
         message: '厚生労働省 法令等データベースの検索結果を取得できませんでした。',
       }],
+      usedIndex: false,
+      indexMeta: tsutatsuIndexRegistry.getMeta('mhlw'),
     };
   }
 
@@ -92,7 +117,11 @@ export async function searchMhlwTsutatsu(opts: {
     page,
     partialFailures: [],
     warnings,
+    usedIndex: false,
+    indexMeta: tsutatsuIndexRegistry.getMeta('mhlw'),
   };
+  tsutatsuIndexRegistry.recordMhlwResults(results);
+  payload.indexMeta = tsutatsuIndexRegistry.getMeta('mhlw');
   mhlwSearchNormalizedCache.set(cacheKey, payload);
   return payload;
 }

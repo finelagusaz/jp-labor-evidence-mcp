@@ -16,6 +16,8 @@ const resolveLawOutputSchema = createToolEnvelopeSchema(
     resolution: z.enum(['resolved', 'ambiguous', 'not_found']),
     retrieved_at: z.string(),
     source_url: z.string(),
+    used_index: z.boolean(),
+    index_freshness: z.enum(['fresh', 'stale', 'unknown']).optional(),
     candidates: z.array(z.object({
       law_id: z.string(),
       canonical_id: z.string(),
@@ -53,6 +55,8 @@ export function registerResolveLawTool(server: McpServer) {
             resolution: result.resolution,
             retrieved_at: isoNow(),
             source_url: 'https://laws.e-gov.go.jp/',
+            used_index: result.usedIndex,
+            index_freshness: result.indexMeta?.freshness,
             candidates: result.candidates.map((candidate) => ({
               law_id: candidate.lawId,
               canonical_id: buildEgovLawCanonicalId(candidate.lawId),

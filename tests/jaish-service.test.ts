@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearAllCaches } from '../src/lib/cache.js';
+import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
+import { tsutatsuIndexRegistry } from '../src/lib/indexes/tsutatsu-index.js';
 
 vi.mock('../src/lib/jaish-client.js', () => ({
   JAISH_INDEX_PAGES: ['/fixture/success.html', '/fixture/fail.html'],
@@ -23,6 +25,8 @@ describe('jaish-tsutatsu-service fixtures', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearAllCaches();
+    tsutatsuIndexRegistry.reset();
+    indexMetadataRegistry.reset();
   });
 
   it('一部年度が失敗しても partial として結果を返す', async () => {
@@ -55,5 +59,25 @@ describe('jaish-tsutatsu-service fixtures', () => {
     expect(result.results).toHaveLength(0);
     expect(result.failedPages).toHaveLength(2);
     expect(result.warnings[0]?.code).toBe('JAISH_SEARCH_UNAVAILABLE');
+  });
+
+  it('既知候補が index にあれば upstream を呼ばずに返す', async () => {
+    vi.mocked(fetchJaishIndex).mockResolvedValue(successHtml);
+    await searchJaishTsutatsu({
+      keyword: '足場',
+      maxPages: 2,
+    });
+
+    vi.mocked(fetchJaishIndex).mockClear();
+
+    const result = await searchJaishTsutatsu({
+      keyword: '足場',
+      maxPages: 2,
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.usedIndex).toBe(true);
+    expect(fetchJaishIndex).not.toHaveBeenCalled();
+    expect(result.indexMeta?.source).toBe('jaish');
   });
 });

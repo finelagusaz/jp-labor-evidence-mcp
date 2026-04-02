@@ -48,6 +48,14 @@ const outputSchema = createToolEnvelopeSchema(
       avg_latency_ms: z.number(),
       failure_rate: z.number(),
     })),
+    indexes: z.array(z.object({
+      source: z.enum(['egov', 'mhlw', 'jaish']),
+      generated_at: z.string(),
+      last_success_at: z.string().optional(),
+      last_failure_at: z.string().optional(),
+      freshness: z.enum(['fresh', 'stale', 'unknown']),
+      entry_count: z.number(),
+    })),
     partial_failures: z.record(z.string(), z.number()),
   })
 );
@@ -77,6 +85,7 @@ export function registerGetObservabilitySnapshotTool(server: McpServer) {
           caches: snapshot.caches,
           tools: snapshot.tools,
           upstreams: snapshot.upstreams,
+          indexes: snapshot.indexes,
           partial_failures: snapshot.partial_failures,
         },
       };
@@ -87,11 +96,14 @@ export function registerGetObservabilitySnapshotTool(server: McpServer) {
       const upstreamLines = snapshot.upstreams.map((upstream) =>
         `- ${upstream.source}: requests=${upstream.requests}, failure_rate=${upstream.failure_rate}, parse_errors=${upstream.parse_errors}, timeouts=${upstream.timeouts}`
       );
+      const indexLines = snapshot.indexes.map((index) =>
+        `- ${index.source}: freshness=${index.freshness}, entries=${index.entry_count}, generated_at=${index.generated_at}`
+      );
 
       return createToolResult(
         'get_observability_snapshot',
         envelope,
-        `# Observability Snapshot\n\n状態: ${snapshot.degraded ? 'degraded' : 'ok'}\n\n## Caches\n${cacheLines.join('\n') || '- なし'}\n\n## Upstreams\n${upstreamLines.join('\n') || '- なし'}`,
+        `# Observability Snapshot\n\n状態: ${snapshot.degraded ? 'degraded' : 'ok'}\n\n## Caches\n${cacheLines.join('\n') || '- なし'}\n\n## Upstreams\n${upstreamLines.join('\n') || '- なし'}\n\n## Indexes\n${indexLines.join('\n') || '- なし'}`,
         startedAt,
       );
     }

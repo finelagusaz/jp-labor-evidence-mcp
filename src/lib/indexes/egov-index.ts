@@ -1,0 +1,141 @@
+import { LAW_ALIAS_MAP, LAW_ID_MAP, type LawRegistryCandidate, isEgovLawId, resolveLawNameStrict, getKnownLawCandidateById } from '../law-registry.js';
+import { buildLawIndexEntry } from './builders.js';
+import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
+import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
+
+const GENERATED_AT = '2026-04-02T00:00:00.000Z';
+
+function inferLawType(lawTitle: string): string {
+  if (lawTitle.endsWith('施行令')) {
+    return 'CabinetOrder';
+  }
+  if (lawTitle.endsWith('施行規則') || lawTitle.endsWith('規則')) {
+    return 'MinisterialOrdinance';
+  }
+  return 'Act';
+}
+
+function buildAliasesByTitle(): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const [alias, title] of Object.entries(LAW_ALIAS_MAP)) {
+    const aliases = map.get(title) ?? [];
+    aliases.push(alias);
+    map.set(title, aliases);
+  }
+  return map;
+}
+
+const ALIASES_BY_TITLE = buildAliasesByTitle();
+
+const LAW_INDEX_ENTRIES: LawIndexEntry[] = Object.entries(LAW_ID_MAP)
+  .map(([lawTitle, lawId]) =>
+    buildLawIndexEntry({
+      lawId,
+      lawTitle,
+      lawType: inferLawType(lawTitle),
+      aliases: ALIASES_BY_TITLE.get(lawTitle) ?? [],
+      sourceUrl: `https://laws.e-gov.go.jp/law/${lawId}`,
+      updatedAt: GENERATED_AT,
+      freshness: 'fresh',
+    })
+  )
+  .sort((a, b) => a.law_title.localeCompare(b.law_title, 'ja-JP'));
+
+const EGOV_INDEX_META: IndexSnapshotMeta = {
+  source: 'egov',
+  generated_at: GENERATED_AT,
+  last_success_at: GENERATED_AT,
+  freshness: inferFreshness(GENERATED_AT),
+  entry_count: LAW_INDEX_ENTRIES.length,
+};
+
+indexMetadataRegistry.register(EGOV_INDEX_META);
+
+export function getEgovIndexMeta(): IndexSnapshotMeta {
+  return EGOV_INDEX_META;
+}
+
+export function getEgovIndexEntries(): LawIndexEntry[] {
+  return LAW_INDEX_ENTRIES;
+}
+
+export function resolveLawFromEgovIndex(query: string): {
+  resolution: 'resolved' | 'ambiguous' | 'not_found';
+  candidates: LawRegistryCandidate[];
+  meta: IndexSnapshotMeta;
+} {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { resolution: 'not_found', candidates: [], meta: EGOV_INDEX_META };
+  }
+
+  if (isEgovLawId(trimmed)) {
+    const known = getKnownLawCandidateById(trimmed);
+    if (known) {
+      return { resolution: 'resolved', candidates: [known], meta: EGOV_INDEX_META };
+    }
+    return {
+      resolution: 'resolved',
+      candidates: [{
+        lawId: trimmed,
+        lawTitle: trimmed,
+        lawType: 'Unknown',
+        sourceUrl: `https://laws.e-gov.go.jp/law/${trimmed}`,
+        aliases: [],
+      }],
+      meta: EGOV_INDEX_META,
+    };
+  }
+
+  const strict = resolveLawNameStrict(trimmed);
+  if (strict.lawId) {
+    return {
+      resolution: 'resolved',
+      candidates: [toCandidate(findEntryByLawId(strict.lawId)!)],
+      meta: EGOV_INDEX_META,
+    };
+  }
+
+  const matches = searchEgovIndex(trimmed, undefined, 20).map(toCandidate);
+  const resolution =
+    matches.length === 0 ? 'not_found' :
+    matches.length === 1 ? 'resolved' :
+    'ambiguous';
+
+  return {
+    resolution,
+    candidates: matches,
+    meta: EGOV_INDEX_META,
+  };
+}
+
+export function searchEgovIndex(keyword: string, lawType?: string, limit = 10): LawIndexEntry[] {
+  const lowered = keyword.trim().toLocaleLowerCase('ja-JP');
+  if (!lowered) {
+    return [];
+  }
+
+  return LAW_INDEX_ENTRIES
+    .filter((entry) => {
+      if (lawType && entry.law_type !== lawType) {
+        return false;
+      }
+      const haystacks = [entry.law_title, ...entry.aliases];
+      return haystacks.some((value) => value.toLocaleLowerCase('ja-JP').includes(lowered));
+    })
+    .slice(0, limit);
+}
+
+function findEntryByLawId(lawId: string): LawIndexEntry | undefined {
+  return LAW_INDEX_ENTRIES.find((entry) => entry.law_id === lawId);
+}
+
+function toCandidate(entry: LawIndexEntry): LawRegistryCandidate {
+  return {
+    lawId: entry.law_id,
+    lawTitle: entry.law_title,
+    lawType: entry.law_type,
+    sourceUrl: entry.source_url,
+    aliases: entry.aliases,
+  };
+}

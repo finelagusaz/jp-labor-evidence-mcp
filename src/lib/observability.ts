@@ -1,3 +1,6 @@
+import { indexMetadataRegistry } from './indexes/index-metadata.js';
+import type { IndexSnapshotMeta } from './indexes/types.js';
+
 export interface CacheMetricsSnapshot {
   name: string;
   kind: 'raw' | 'normalized';
@@ -200,6 +203,7 @@ class ObservabilityRegistry {
     const degradedReasons = evaluateDegradedReasons({
       upstreams,
       partialFailures: this.partialFailures,
+      indexes: indexMetadataRegistry.list(),
     });
     const degradedSources = Array.from(new Set(degradedReasons.map((reason) => reason.source)));
 
@@ -211,6 +215,7 @@ class ObservabilityRegistry {
       caches,
       tools,
       upstreams,
+      indexes: indexMetadataRegistry.list(),
       partial_failures: Object.fromEntries(this.partialFailures),
     };
   }
@@ -289,6 +294,7 @@ export const observabilityRegistry = new ObservabilityRegistry();
 function evaluateDegradedReasons(input: {
   upstreams: UpstreamMetricsSnapshot[];
   partialFailures: Map<string, number>;
+  indexes: IndexSnapshotMeta[];
 }): DegradedReason[] {
   const reasons: DegradedReason[] = [];
 
@@ -322,6 +328,16 @@ function evaluateDegradedReasons(input: {
         source,
         code: 'PARTIAL_FAILURE_DETECTED',
         message: `partial_failures=${count}`,
+      });
+    }
+  }
+
+  for (const index of input.indexes) {
+    if (index.freshness === 'stale') {
+      reasons.push({
+        source: index.source,
+        code: 'STALE_INDEX',
+        message: `generated_at=${index.generated_at}`,
       });
     }
   }

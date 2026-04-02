@@ -21,6 +21,8 @@ const searchLawOutputSchema = createToolEnvelopeSchema(
     keyword: z.string(),
     retrieved_at: z.string(),
     source_url: z.string(),
+    used_index: z.boolean(),
+    index_freshness: z.enum(['fresh', 'stale', 'unknown']).optional(),
     results: z.array(z.object({
       law_title: z.string(),
       law_id: z.string(),
@@ -54,12 +56,14 @@ export function registerSearchLawTool(server: McpServer) {
           status: result.results.length === 0 ? 'not_found' as const : 'ok' as const,
           retryable: false,
           degraded: false,
-          warnings: [],
+          warnings: result.warnings,
           partial_failures: [],
           data: {
             keyword: result.keyword,
             retrieved_at: retrievedAt,
             source_url: sourceUrl,
+            used_index: result.usedIndex,
+            index_freshness: result.indexMeta?.freshness,
             results: result.results.map((r) => ({
               law_title: r.lawTitle,
               law_id: r.lawId,

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NormalizedCache, TTLCache } from '../src/lib/cache.js';
+import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
 import { observabilityRegistry } from '../src/lib/observability.js';
 import { registerGetObservabilitySnapshotTool } from '../src/tools/get-observability-snapshot.js';
 import { createToolResult } from '../src/lib/tool-contract.js';
@@ -12,6 +13,7 @@ function createServerStub(registerTool: ReturnType<typeof vi.fn>): McpServer {
 describe('observability', () => {
   beforeEach(() => {
     observabilityRegistry.reset();
+    indexMetadataRegistry.reset();
   });
 
   it('cache metrics を集計できる', () => {
@@ -53,6 +55,7 @@ describe('observability', () => {
   it('observability snapshot tool が structuredContent を返す', async () => {
     observabilityRegistry.recordUpstreamRequest('egov', 123, 'success');
     observabilityRegistry.recordPartialFailure('jaish', 2);
+    indexMetadataRegistry.recordSuccess('egov', '2026-04-02T00:00:00.000Z', 45);
     createToolResult(
       'resolve_law',
       {
@@ -77,8 +80,24 @@ describe('observability', () => {
 
     expect(result.structuredContent.status).toBe('ok');
     expect(result.structuredContent.data?.upstreams[0]?.source).toBe('egov');
+    expect(result.structuredContent.data?.indexes[0]?.source).toBe('egov');
     expect(result.structuredContent.data?.partial_failures.jaish).toBe(2);
     expect(result.structuredContent.data?.tools[0]?.tool).toBe('resolve_law');
     expect(result.structuredContent.data?.degraded_reasons.some((reason) => reason.source === 'jaish')).toBe(true);
+  });
+
+  it('stale index を degraded reason に含める', () => {
+    indexMetadataRegistry.register({
+      source: 'mhlw',
+      generated_at: '2026-03-01T00:00:00.000Z',
+      last_success_at: '2026-03-01T00:00:00.000Z',
+      freshness: 'stale',
+      entry_count: 10,
+    });
+
+    const snapshot = observabilityRegistry.snapshot();
+
+    expect(snapshot.degraded).toBe(true);
+    expect(snapshot.degraded_reasons.some((reason) => reason.code === 'STALE_INDEX' && reason.source === 'mhlw')).toBe(true);
   });
 });
