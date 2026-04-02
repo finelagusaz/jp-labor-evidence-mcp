@@ -78,7 +78,12 @@ export function filterJaishEntries(entries: JaishIndexEntry[], keyword: string):
  *   <pre>本文...</pre>
  * </div>
  */
-export function parseJaishDocument(html: string): { title: string; body: string } {
+export function parseJaishDocument(html: string): {
+  title: string;
+  body: string;
+  date?: string;
+  number?: string;
+} {
   // タイトルを <title> タグから取得（「｜安全衛生情報センター」を除去）
   const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
   const title = titleMatch
@@ -92,12 +97,20 @@ export function parseJaishDocument(html: string): { title: string; body: string 
     : '';
 
   const lines: string[] = [];
+  let date: string | undefined;
+  let number: string | undefined;
 
   // ヘッダー情報（番号、日付、宛先、発出者）
   const noMatch = hombunHtml.match(/<div\s+class="seiteiNo">([\s\S]*?)<\/div>/i);
   const ymdMatch = hombunHtml.match(/<div\s+class="seiteiYmd">([\s\S]*?)<\/div>/i);
-  if (noMatch) lines.push(stripTags(noMatch[1]).trim());
-  if (ymdMatch) lines.push(stripTags(ymdMatch[1]).trim());
+  if (noMatch) {
+    number = stripTags(noMatch[1]).trim();
+    lines.push(number);
+  }
+  if (ymdMatch) {
+    date = stripTags(ymdMatch[1]).trim();
+    lines.push(date);
+  }
 
   // 宛先・発出者
   const toRegex = /<div\s+class="To\d+">([\s\S]*?)<\/div>/gi;
@@ -133,5 +146,5 @@ export function parseJaishDocument(html: string): { title: string; body: string 
 
   const body = lines.join('\n');
 
-  return { title, body };
+  return { title, body, date, number };
 }

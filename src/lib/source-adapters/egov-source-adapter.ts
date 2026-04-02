@@ -10,6 +10,7 @@ class EgovSourceAdapter extends HttpSourceAdapter {
   constructor() {
     super({
       baseUrl: EGOV_API_BASE,
+      sourceName: 'egov',
       minIntervalMs: 200,
       timeoutMs: 30_000,
       userAgent: USER_AGENT,

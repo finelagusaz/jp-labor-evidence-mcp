@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerGetArticleTool } from './tools/get-article.js';
+import { registerGetObservabilitySnapshotTool } from './tools/get-observability-snapshot.js';
 import { registerGetLawTool } from './tools/get-law.js';
 import { registerResolveLawTool } from './tools/resolve-law.js';
 import { registerSearchLawTool } from './tools/search-law.js';
@@ -49,6 +50,9 @@ export function createServer(): McpServer {
   // JAISH安衛通達ツール（安全衛生情報センター）
   registerSearchJaishTsutatsuTool(server);  // search_jaish_tsutatsu: 安衛通達検索
   registerGetJaishTsutatsuTool(server);     // get_jaish_tsutatsu: 安衛通達本文取得
+
+  // 観測性
+  registerGetObservabilitySnapshotTool(server); // get_observability_snapshot: メトリクス確認
 
   // プロンプトテンプレート
   registerPrompts(server);

@@ -5,7 +5,8 @@
 import { fetchMhlwSearch, fetchMhlwDocument, getMhlwDocUrl } from '../mhlw-client.js';
 import { parseMhlwSearchResults, parseMhlwSearchCount, parseMhlwDocument } from '../mhlw-parser.js';
 import type { MhlwSearchResult, MhlwDocument, PartialFailure, WarningMessage } from '../types.js';
-import { ExternalApiError, ValidationError } from '../errors.js';
+import { ExternalApiError, ParseError, ValidationError } from '../errors.js';
+import { observabilityRegistry } from '../observability.js';
 
 export interface MhlwSearchResponse {
   status: 'ok' | 'unavailable';
@@ -35,6 +36,8 @@ export async function searchMhlwTsutatsu(opts: {
       throw error;
     }
 
+    observabilityRegistry.recordPartialFailure('mhlw', 1);
+
     return {
       status: 'unavailable',
       results: [],
@@ -57,6 +60,7 @@ export async function searchMhlwTsutatsu(opts: {
   const warnings: WarningMessage[] = [];
 
   if (totalCount > 0 && results.length === 0) {
+    observabilityRegistry.recordParseError('mhlw');
     warnings.push({
       code: 'MHLW_SEARCH_PARSE_MISMATCH',
       message: '検索結果件数は取得できましたが、一覧の抽出に失敗した可能性があります。',
@@ -93,8 +97,12 @@ export async function getMhlwTsutatsu(opts: {
     throw new ExternalApiError(`MHLW エラー (dataId: ${opts.dataId}): ${errMsg}`);
   }
 
-  const { title, body } = parseMhlwDocument(html);
+  const { title, body, date, number } = parseMhlwDocument(html);
+  if (!title.trim() && !body.trim()) {
+    observabilityRegistry.recordParseError('mhlw');
+    throw new ParseError(`MHLW 本文の解析に失敗しました (dataId: ${opts.dataId}, pageNo: ${pageNo})`);
+  }
   const url = getMhlwDocUrl(opts.dataId, pageNo);
 
-  return { title, dataId: opts.dataId, body, url };
+  return { title, dataId: opts.dataId, body, date, number, url };
 }

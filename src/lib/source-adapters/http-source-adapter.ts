@@ -1,3 +1,5 @@
+import { observabilityRegistry } from '../observability.js';
+
 export interface HttpAdapterOptions {
   baseUrl: string;
   minIntervalMs: number;
@@ -6,6 +8,7 @@ export interface HttpAdapterOptions {
   maxConcurrency?: number;
   circuitBreakerThreshold?: number;
   circuitBreakerResetMs?: number;
+  sourceName?: string;
 }
 
 export class HttpSourceAdapter {
@@ -13,6 +16,7 @@ export class HttpSourceAdapter {
   private readonly maxConcurrency: number;
   private readonly circuitBreakerThreshold: number;
   private readonly circuitBreakerResetMs: number;
+  private readonly sourceName: string;
   private rateLimitQueue: Promise<void> = Promise.resolve();
   private inFlight = 0;
   private waiters: Array<() => void> = [];
@@ -23,6 +27,7 @@ export class HttpSourceAdapter {
     this.maxConcurrency = options.maxConcurrency ?? 1;
     this.circuitBreakerThreshold = options.circuitBreakerThreshold ?? 3;
     this.circuitBreakerResetMs = options.circuitBreakerResetMs ?? 30_000;
+    this.sourceName = options.sourceName ?? options.baseUrl;
   }
 
   protected get baseUrl(): string {
@@ -45,6 +50,7 @@ export class HttpSourceAdapter {
   }
 
   private async fetchResponse(url: string, init?: RequestInit): Promise<Response> {
+    const startedAt = Date.now();
     this.ensureCircuitClosed();
     await this.acquireSlot();
 
@@ -67,9 +73,14 @@ export class HttpSourceAdapter {
         throw new Error(`HTTP ${response.status} ${response.statusText} — ${url}`);
       }
       this.recordSuccess();
+      observabilityRegistry.recordUpstreamRequest(this.sourceName, Date.now() - startedAt, 'success');
       return response;
     } catch (error) {
       this.recordFailure();
+      observabilityRegistry.recordUpstreamRequest(this.sourceName, Date.now() - startedAt, 'failure');
+      if (error instanceof Error && error.name === 'AbortError') {
+        observabilityRegistry.recordTimeout(this.sourceName);
+      }
       throw error;
     } finally {
       clearTimeout(timeout);
@@ -99,6 +110,7 @@ export class HttpSourceAdapter {
 
   private ensureCircuitClosed(): void {
     if (Date.now() < this.circuitOpenUntil) {
+      observabilityRegistry.recordCircuitOpen(this.sourceName);
       throw new Error(
         `Circuit breaker is open for ${this.baseUrl} until ${new Date(this.circuitOpenUntil).toISOString()}`
       );

@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildEgovArticleCanonicalId, buildEgovTocCanonicalId } from '../lib/canonical-id.js';
+import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
 import { getLawArticle, getLawToc } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -35,6 +37,8 @@ const getLawOutputSchema = createToolEnvelopeSchema(
     body: z.string(),
     source_url: z.string(),
     retrieved_at: z.string(),
+    version_info: z.string().optional(),
+    upstream_hash: z.string(),
   })
 );
 
@@ -47,18 +51,24 @@ export function registerGetLawTool(server: McpServer) {
       outputSchema: getLawOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
+        const deprecationWarning = {
+          code: 'DEPRECATED_TOOL',
+          message: 'get_law は非推奨です。新規利用では resolve_law と get_article を使用してください。',
+        };
         if (args.format === 'toc') {
           const result = await getLawToc({ lawName: args.law_name });
+          const lawId = result.egovUrl.split('/').pop() ?? args.law_name;
           const envelope = {
             status: 'ok' as const,
             retryable: false,
             degraded: false,
-            warnings: [],
+            warnings: [deprecationWarning],
             partial_failures: [],
             data: {
               source_type: 'egov' as const,
-              canonical_id: result.egovUrl.split('/').pop() ?? args.law_name,
+              canonical_id: buildEgovTocCanonicalId(lawId),
               law_title: result.lawTitle,
               law_name: args.law_name,
               format: 'toc' as const,
@@ -66,26 +76,32 @@ export function registerGetLawTool(server: McpServer) {
               body: result.toc,
               source_url: result.egovUrl,
               retrieved_at: isoNow(),
+              version_info: joinVersionInfo([result.lawNum, result.promulgationDate]),
+              upstream_hash: computeUpstreamHash([lawId, result.lawTitle, result.toc, result.egovUrl]),
             },
           };
           return createToolResult(
+            'get_law',
             envelope,
             `# ${result.lawTitle} — 目次\n\n${result.toc}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+            startedAt,
           );
         }
 
         if (!args.article) {
           return createToolResult(
+            'get_law',
             {
               status: 'invalid',
               error_code: 'validation',
               retryable: false,
               degraded: false,
-              warnings: [],
+              warnings: [deprecationWarning],
               partial_failures: [],
               data: null,
             },
             'エラー: 条文番号（article）を指定してください。目次を取得する場合は format="toc" を指定してください。',
+            startedAt,
           );
         }
 
@@ -102,15 +118,18 @@ export function registerGetLawTool(server: McpServer) {
         const paraDisplay = args.paragraph ? `第${args.paragraph}項` : '';
         const itemDisplay = args.item ? `第${args.item}号` : '';
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
+        const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
+        const versionInfo = joinVersionInfo([result.lawNum, result.promulgationDate]);
+        const lawId = result.egovUrl.split('/').pop() ?? args.law_name;
         const envelope = {
           status: 'ok' as const,
           retryable: false,
           degraded: false,
-          warnings: [],
+          warnings: [deprecationWarning],
           partial_failures: [],
           data: {
             source_type: 'egov' as const,
-            canonical_id: result.egovUrl.split('/').pop() ?? args.law_name,
+            canonical_id: buildEgovArticleCanonicalId(lawId, args.article, args.paragraph, args.item),
             law_title: result.lawTitle,
             law_name: args.law_name,
             article: args.article,
@@ -118,21 +137,27 @@ export function registerGetLawTool(server: McpServer) {
             item: args.item,
             format: 'markdown' as const,
             title,
-            body: `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`,
+            body,
             source_url: result.egovUrl,
             retrieved_at: isoNow(),
+            version_info: versionInfo,
+            upstream_hash: computeUpstreamHash([lawId, title, body, result.egovUrl]),
           },
         };
 
         return createToolResult(
+          'get_law',
           envelope,
           `# ${title}\n${result.articleCaption ? `（${result.articleCaption}）\n` : ''}\n${result.text}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'get_law',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

@@ -59,6 +59,10 @@ export interface MhlwDocument {
   title: string;
   /** 本文テキスト */
   body: string;
+  /** 制定年月日 */
+  date?: string;
+  /** 種別・番号 */
+  number?: string;
   /** dataId */
   dataId: string;
   /** ソースURL */
@@ -85,6 +89,10 @@ export interface JaishDocument {
   title: string;
   /** 本文テキスト */
   body: string;
+  /** 発出日 */
+  date?: string;
+  /** 通達番号 */
+  number?: string;
   /** ソースURL */
   url: string;
 }

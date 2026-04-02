@@ -9,6 +9,7 @@ class MhlwSourceAdapter extends HttpSourceAdapter {
   constructor() {
     super({
       baseUrl: BASE_URL,
+      sourceName: 'mhlw',
       minIntervalMs: 200,
       timeoutMs: 15_000,
       userAgent: USER_AGENT,

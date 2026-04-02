@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildEgovArticleCanonicalId } from '../lib/canonical-id.js';
+import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
 import { getArticleByLawId } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -31,6 +33,8 @@ const getArticleOutputSchema = createToolEnvelopeSchema(
     body: z.string(),
     source_url: z.string(),
     retrieved_at: z.string(),
+    version_info: z.string().optional(),
+    upstream_hash: z.string(),
   })
 );
 
@@ -43,6 +47,7 @@ export function registerGetArticleTool(server: McpServer) {
       outputSchema: getArticleOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
         const result = await getArticleByLawId({
           lawId: args.law_id,
@@ -57,6 +62,7 @@ export function registerGetArticleTool(server: McpServer) {
         const itemDisplay = args.item ? `第${args.item}号` : '';
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
         const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
+        const versionInfo = joinVersionInfo([result.lawNum, result.promulgationDate]);
 
         const envelope = {
           status: 'ok' as const,
@@ -66,7 +72,7 @@ export function registerGetArticleTool(server: McpServer) {
           partial_failures: [],
           data: {
             source_type: 'egov' as const,
-            canonical_id: result.lawId,
+            canonical_id: buildEgovArticleCanonicalId(result.lawId, args.article, args.paragraph, args.item),
             law_id: result.lawId,
             law_title: result.lawTitle,
             article: args.article,
@@ -76,18 +82,24 @@ export function registerGetArticleTool(server: McpServer) {
             body,
             source_url: result.egovUrl,
             retrieved_at: isoNow(),
+            version_info: versionInfo,
+            upstream_hash: computeUpstreamHash([result.lawId, title, body, result.egovUrl]),
           },
         };
 
         return createToolResult(
+          'get_article',
           envelope,
           `# ${title}\n${result.articleCaption ? `（${result.articleCaption}）\n` : ''}\n${result.text}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'get_article',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

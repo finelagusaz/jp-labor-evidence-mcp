@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
 import { searchLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -40,6 +41,7 @@ export function registerSearchLawTool(server: McpServer) {
       outputSchema: searchLawOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
         const result = await searchLaw({
           keyword: args.keyword,
@@ -61,7 +63,7 @@ export function registerSearchLawTool(server: McpServer) {
             results: result.results.map((r) => ({
               law_title: r.lawTitle,
               law_id: r.lawId,
-              canonical_id: r.lawId,
+              canonical_id: buildEgovLawCanonicalId(r.lawId),
               law_num: r.lawNum,
               law_type: r.lawType,
               source_url: r.egovUrl,
@@ -71,8 +73,13 @@ export function registerSearchLawTool(server: McpServer) {
 
         if (result.results.length === 0) {
           return createToolResult(
-            envelope,
+            'search_law',
+            {
+              ...envelope,
+              error_code: 'not_found',
+            },
             `"${args.keyword}" に一致する法令が見つかりませんでした。\nキーワードを変えて再検索してください（例: 類義語や略称を試す）。\n条文を取得する前に、search_law で正式名称または law_id を確認してください。`,
+            startedAt,
           );
         }
 
@@ -81,14 +88,18 @@ export function registerSearchLawTool(server: McpServer) {
         );
 
         return createToolResult(
+          'search_law',
           envelope,
           `# 法令検索結果: "${args.keyword}"\n\n${lines.join('\n\n')}\n\n---\n出典：e-Gov法令検索（デジタル庁）`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'search_law',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

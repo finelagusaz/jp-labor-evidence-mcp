@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildMhlwDocumentCanonicalId } from '../lib/canonical-id.js';
 import { searchMhlwTsutatsu } from '../lib/services/mhlw-tsutatsu-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -38,6 +39,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
       outputSchema: searchMhlwOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
         const result = await searchMhlwTsutatsu({
           keyword: args.keyword,
@@ -64,7 +66,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
               date: r.date,
               shubetsu: r.shubetsu,
               data_id: r.dataId,
-              canonical_id: r.dataId,
+              canonical_id: buildMhlwDocumentCanonicalId(r.dataId),
             })),
           },
         };
@@ -75,8 +77,10 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
           );
 
           return createToolResult(
+            'search_mhlw_tsutatsu',
             envelope,
             `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: unavailable\n検索結果の取得に失敗しました。\n\n失敗箇所:\n${failureLines.join('\n')}`,
+            startedAt,
           );
         }
 
@@ -85,12 +89,15 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
             ? `\n\n警告:\n${result.warnings.map((warning) => `- [${warning.code}] ${warning.message}`).join('\n')}`
             : '';
           return createToolResult(
+            'search_mhlw_tsutatsu',
             {
               ...envelope,
               status: 'not_found' as const,
+              error_code: 'not_found' as const,
               retryable: false,
             },
             `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: not_found\n0件（${result.page + 1}ページ目）\nキーワードを変えて再検索してください（例: 類義語・上位概念・正式名称を試す）。\n安全衛生関連の場合は search_jaish_tsutatsu も試してください。${warningSection}`,
+            startedAt,
           );
         }
 
@@ -103,14 +110,18 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
           : '';
 
         return createToolResult(
+          'search_mhlw_tsutatsu',
           envelope,
           `# 厚労省通達検索結果: 「${args.keyword}」\n\n状態: ${result.status}\n該当件数: ${result.totalCount}件（${result.page + 1}ページ目）\n\n${lines.join('\n\n')}${warningSection}\n\n---\n※ 本文を読むには get_mhlw_tsutatsu で data_id を指定してください。\n出典：厚生労働省 法令等データベース`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'search_mhlw_tsutatsu',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
 import { resolveLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -35,8 +36,9 @@ export function registerResolveLawTool(server: McpServer) {
       outputSchema: resolveLawOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
-        const result = resolveLaw({ query: args.query });
+        const result = await resolveLaw({ query: args.query });
         const envelope = {
           status:
             result.resolution === 'resolved' ? 'ok' as const :
@@ -44,7 +46,7 @@ export function registerResolveLawTool(server: McpServer) {
             'not_found' as const,
           retryable: false,
           degraded: false,
-          warnings: [],
+          warnings: result.warnings,
           partial_failures: [],
           data: {
             query: result.query,
@@ -53,7 +55,7 @@ export function registerResolveLawTool(server: McpServer) {
             source_url: 'https://laws.e-gov.go.jp/',
             candidates: result.candidates.map((candidate) => ({
               law_id: candidate.lawId,
-              canonical_id: candidate.lawId,
+              canonical_id: buildEgovLawCanonicalId(candidate.lawId),
               law_title: candidate.lawTitle,
               law_type: candidate.lawType,
               aliases: candidate.aliases,
@@ -64,8 +66,13 @@ export function registerResolveLawTool(server: McpServer) {
 
         if (result.resolution === 'not_found') {
           return createToolResult(
-            envelope,
+            'resolve_law',
+            {
+              ...envelope,
+              error_code: 'not_found',
+            },
             `「${args.query}」に一致する既知の法令候補は見つかりませんでした。\n必要なら search_law で候補を検索してください。`,
+            startedAt,
           );
         }
 
@@ -74,14 +81,18 @@ export function registerResolveLawTool(server: McpServer) {
         );
 
         return createToolResult(
+          'resolve_law',
           envelope,
           `# 法令解決結果: "${args.query}"\n\n状態: ${result.resolution}\n\n${lines.join('\n\n')}\n\n---\n次に本文を取得する場合は get_article へ law_id を渡してください。`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'resolve_law',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

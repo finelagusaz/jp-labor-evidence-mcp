@@ -84,7 +84,12 @@ export function parseMhlwSearchCount(html: string): number {
  *   ...
  * </div>
  */
-export function parseMhlwDocument(html: string): { title: string; body: string } {
+export function parseMhlwDocument(html: string): {
+  title: string;
+  body: string;
+  date?: string;
+  number?: string;
+} {
   // タイトルを <title> タグから取得
   // 例: "・タイトル(◆平成15年05月23日基発第523004号)"
   const htmlTitleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
@@ -104,6 +109,8 @@ export function parseMhlwDocument(html: string): { title: string; body: string }
 
   // <p> タグからテキストを抽出（class属性ありなし両方対応）
   const lines: string[] = [];
+  let date: string | undefined;
+  let number: string | undefined;
   const pRegex = /<p[^>]*?(?:\s+class="([^"]*)")?[^>]*>([\s\S]*?)<\/p>/gi;
   let pMatch;
 
@@ -118,9 +125,9 @@ export function parseMhlwDocument(html: string): { title: string; body: string }
     if (className.includes('title-irregular')) {
       text = `## ${text.replace(/^○/, '')}`;
     } else if (className === 'date') {
-      // 日付行 — そのまま出力
+      date = text;
     } else if (className === 'number' || className === 'n-diet' || className === 'cabinet') {
-      // 番号行 — そのまま出力
+      number = text;
     } else if (className === 'num') {
       text = `### ${text}`;
     }
@@ -130,6 +137,5 @@ export function parseMhlwDocument(html: string): { title: string; body: string }
 
   const body = lines.join('\n\n');
 
-  return { title, body };
+  return { title, body, date, number };
 }
-

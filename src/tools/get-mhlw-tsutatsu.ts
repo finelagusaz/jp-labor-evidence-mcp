@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildMhlwCanonicalId } from '../lib/canonical-id.js';
+import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
 import { getMhlwTsutatsu } from '../lib/services/mhlw-tsutatsu-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -22,6 +24,8 @@ const getMhlwOutputSchema = createToolEnvelopeSchema(
     page_no: z.number(),
     source_url: z.string(),
     retrieved_at: z.string(),
+    version_info: z.string().optional(),
+    upstream_hash: z.string(),
   })
 );
 
@@ -34,6 +38,7 @@ export function registerGetMhlwTsutatsuTool(server: McpServer) {
       outputSchema: getMhlwOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
         const result = await getMhlwTsutatsu({
           dataId: args.data_id,
@@ -41,6 +46,8 @@ export function registerGetMhlwTsutatsuTool(server: McpServer) {
         });
 
         const title = result.title || '(タイトル取得不可)';
+        const pageNo = args.page_no ?? 1;
+        const versionInfo = joinVersionInfo([result.date, result.number]);
         const envelope = {
           status: 'ok' as const,
           retryable: false,
@@ -49,25 +56,31 @@ export function registerGetMhlwTsutatsuTool(server: McpServer) {
           partial_failures: [],
           data: {
             source_type: 'mhlw' as const,
-            canonical_id: result.dataId,
+            canonical_id: buildMhlwCanonicalId(result.dataId, pageNo),
             title,
             body: result.body,
             data_id: result.dataId,
-            page_no: args.page_no ?? 1,
+            page_no: pageNo,
             source_url: result.url,
             retrieved_at: isoNow(),
+            version_info: versionInfo,
+            upstream_hash: computeUpstreamHash([result.dataId, title, result.body, result.url]),
           },
         };
 
         return createToolResult(
+          'get_mhlw_tsutatsu',
           envelope,
           `# ${title}\n\n${result.body}\n\n---\n出典：厚生労働省 法令等データベース\nURL: ${result.url}`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'get_mhlw_tsutatsu',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

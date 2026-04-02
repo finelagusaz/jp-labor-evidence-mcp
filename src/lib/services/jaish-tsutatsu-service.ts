@@ -5,7 +5,8 @@
 import { fetchJaishIndex, fetchJaishPage, getJaishUrl, JAISH_INDEX_PAGES } from '../jaish-client.js';
 import { parseJaishIndex, filterJaishEntries, parseJaishDocument } from '../jaish-parser.js';
 import type { JaishIndexEntry, JaishDocument, PartialFailure, WarningMessage } from '../types.js';
-import { ValidationError } from '../errors.js';
+import { ParseError, ValidationError } from '../errors.js';
+import { observabilityRegistry } from '../observability.js';
 
 export interface JaishSearchResponse {
   status: 'ok' | 'partial' | 'unavailable';
@@ -58,6 +59,7 @@ export async function searchJaishTsutatsu(opts: {
       allResults.push(...filtered);
       pagesSearched++;
     } catch (error) {
+      observabilityRegistry.recordPartialFailure('jaish', 1);
       failedPages.push({
         source: 'jaish',
         target: path,
@@ -99,8 +101,12 @@ export async function getJaishTsutatsu(opts: {
     throw new ValidationError('JAISH の URL またはパスを指定してください');
   }
   const html = await fetchJaishPage(opts.url);
-  const { title, body } = parseJaishDocument(html);
+  const { title, body, date, number } = parseJaishDocument(html);
+  if (!title.trim() && !body.trim()) {
+    observabilityRegistry.recordParseError('jaish');
+    throw new ParseError(`JAISH 本文の解析に失敗しました: ${opts.url}`);
+  }
   const fullUrl = getJaishUrl(opts.url);
 
-  return { title, body, url: fullUrl };
+  return { title, body, date, number, url: fullUrl };
 }

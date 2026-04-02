@@ -3,7 +3,7 @@ import { TTLCache } from '../src/lib/cache.js';
 
 describe('TTLCache', () => {
   it('maxEntries を超えたら古いキーから eviction する', () => {
-    const cache = new TTLCache<string>(60_000, 2);
+    const cache = new TTLCache<string>('test', 60_000, 2);
 
     cache.set('a', '1');
     cache.set('b', '2');
@@ -16,7 +16,7 @@ describe('TTLCache', () => {
   });
 
   it('同一キーの再設定で size が増えない', () => {
-    const cache = new TTLCache<string>(60_000, 2);
+    const cache = new TTLCache<string>('test', 60_000, 2);
 
     cache.set('a', '1');
     cache.set('a', '2');

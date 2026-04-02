@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { buildJaishCanonicalId } from '../lib/canonical-id.js';
 import { searchJaishTsutatsu } from '../lib/services/jaish-tsutatsu-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -41,6 +42,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
       outputSchema: searchJaishOutputSchema,
     },
     async (args) => {
+      const startedAt = Date.now();
       try {
         const result = await searchJaishTsutatsu({
           keyword: args.keyword,
@@ -66,7 +68,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
               number: r.number,
               date: r.date,
               url: r.url,
-              canonical_id: r.url,
+              canonical_id: buildJaishCanonicalId(r.url),
               source_url: r.url.startsWith('http') ? r.url : `https://www.jaish.gr.jp${r.url}`,
             })),
           },
@@ -78,8 +80,10 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
           );
 
           return createToolResult(
+            'search_jaish_tsutatsu',
             envelope,
             `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: unavailable\n検索対象の年度インデックス取得に失敗しました。\n\n失敗ページ:\n${failureLines.join('\n')}\n\n---\n厚労省通達は search_mhlw_tsutatsu で検索できます。`,
+            startedAt,
           );
         }
 
@@ -96,24 +100,31 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
 
         if (result.results.length === 0) {
           return createToolResult(
+            'search_jaish_tsutatsu',
             {
               ...envelope,
               status: result.status === 'partial' ? 'partial' as const : 'not_found' as const,
+              error_code: result.status === 'partial' ? undefined : 'not_found' as const,
               retryable: result.status === 'partial',
             },
             `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: ${result.status === 'partial' ? 'partial' : 'not_found'}\n0件（${result.pagesSearched}年度分を検索）\nmax_pages を増やすと検索範囲が広がります。キーワードを変えて再検索も試してください。${warningSection}${failureSection}\n\n---\n厚労省通達は search_mhlw_tsutatsu で検索できます。`,
+            startedAt,
           );
         }
 
         return createToolResult(
+          'search_jaish_tsutatsu',
           envelope,
           `# JAISH安衛通達検索結果: 「${args.keyword}」\n\n状態: ${result.status}\n${result.results.length}件（${result.pagesSearched}年度分を検索）\n\n${lines.join('\n\n')}${warningSection}${failureSection}\n\n---\n※ 本文を読むには get_jaish_tsutatsu で url を指定してください。\n出典：安全衛生情報センター（中央労働災害防止協会）`,
+          startedAt,
         );
       } catch (error) {
         const envelope = mapErrorToEnvelope(error);
         return createToolResult(
+          'search_jaish_tsutatsu',
           envelope,
           `エラー: ${error instanceof Error ? error.message : String(error)}`,
+          startedAt,
         );
       }
     }

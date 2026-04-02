@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ExternalApiError, NotFoundError, ValidationError } from './errors.js';
+import { AmbiguousInputError, ExternalApiError, NotFoundError, ParseError, ValidationError } from './errors.js';
+import { observabilityRegistry } from './observability.js';
 import type { PartialFailure, WarningMessage } from './types.js';
 
 export const toolStatusSchema = z.enum(['ok', 'partial', 'not_found', 'unavailable', 'invalid']);
@@ -47,9 +48,15 @@ export function createToolEnvelopeSchema<T extends z.ZodTypeAny>(dataSchema: T) 
 }
 
 export function createToolResult<T extends Record<string, unknown> | null>(
+  toolName: string,
   envelope: ToolEnvelope<T>,
   text: string,
+  startedAt?: number,
 ) {
+  observabilityRegistry.recordToolCall(toolName, startedAt ? Date.now() - startedAt : 0, {
+    isError: envelope.status === 'invalid' || envelope.status === 'unavailable',
+    status: envelope.status,
+  });
   return {
     structuredContent: envelope,
     content: [{ type: 'text' as const, text }],
@@ -58,7 +65,7 @@ export function createToolResult<T extends Record<string, unknown> | null>(
 }
 
 export function mapErrorToEnvelope(error: unknown): ToolEnvelope<null> {
-  if (error instanceof ValidationError) {
+  if (error instanceof ValidationError || error instanceof AmbiguousInputError) {
     return {
       status: 'invalid',
       error_code: 'validation',
@@ -88,6 +95,18 @@ export function mapErrorToEnvelope(error: unknown): ToolEnvelope<null> {
       error_code: 'upstream_unavailable',
       retryable: true,
       degraded: false,
+      warnings: [],
+      partial_failures: [],
+      data: null,
+    };
+  }
+
+  if (error instanceof ParseError) {
+    return {
+      status: 'unavailable',
+      error_code: 'parse_error',
+      retryable: false,
+      degraded: true,
       warnings: [],
       partial_failures: [],
       data: null,

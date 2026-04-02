@@ -34,3 +34,19 @@ export class ExternalApiError extends Error {
     this.name = 'ExternalApiError';
   }
 }
+
+export class ParseError extends Error {
+  readonly status = 502;
+  constructor(message: string) {
+    super(message);
+    this.name = 'ParseError';
+  }
+}
+
+export class AmbiguousInputError extends Error {
+  readonly status = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = 'AmbiguousInputError';
+  }
+}

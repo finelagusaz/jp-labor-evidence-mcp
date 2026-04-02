@@ -9,6 +9,7 @@ class JaishSourceAdapter extends HttpSourceAdapter {
   constructor() {
     super({
       baseUrl: BASE_URL,
+      sourceName: 'jaish',
       minIntervalMs: 300,
       timeoutMs: 15_000,
       userAgent: USER_AGENT,
