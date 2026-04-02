@@ -131,6 +131,14 @@ export const LAW_ALIAS_MAP: Record<string, string> = {
   '社労士法': '社会保険労務士法',
 };
 
+export interface LawRegistryCandidate {
+  lawId: string;
+  lawTitle: string;
+  lawType: string;
+  sourceUrl: string;
+  aliases: string[];
+}
+
 /**
  * e-Gov law_id 形式かどうかを判定する
  */
@@ -150,4 +158,98 @@ export function resolveLawNameStrict(input: string): { name: string; lawId: stri
   const lawId = LAW_ID_MAP[normalizedName] ?? null;
 
   return { name: normalizedName, lawId };
+}
+
+function inferLawType(lawTitle: string): string {
+  if (lawTitle.endsWith('施行令')) {
+    return 'CabinetOrder';
+  }
+  if (lawTitle.endsWith('施行規則') || lawTitle.endsWith('規則')) {
+    return 'MinisterialOrdinance';
+  }
+  return 'Act';
+}
+
+function buildLawAliasMap(): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+
+  for (const [alias, title] of Object.entries(LAW_ALIAS_MAP)) {
+    const aliases = map.get(title) ?? [];
+    aliases.push(alias);
+    map.set(title, aliases);
+  }
+
+  return map;
+}
+
+const LAW_ALIASES_BY_TITLE = buildLawAliasMap();
+
+export function getKnownLawCandidateById(lawId: string): LawRegistryCandidate | null {
+  const entry = Object.entries(LAW_ID_MAP).find(([, value]) => value === lawId);
+  if (!entry) {
+    return null;
+  }
+
+  const [lawTitle] = entry;
+  return {
+    lawId,
+    lawTitle,
+    lawType: inferLawType(lawTitle),
+    sourceUrl: `https://laws.e-gov.go.jp/law/${lawId}`,
+    aliases: LAW_ALIASES_BY_TITLE.get(lawTitle) ?? [],
+  };
+}
+
+export function resolveLawCandidates(query: string): LawRegistryCandidate[] {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  if (isEgovLawId(trimmed)) {
+    const known = getKnownLawCandidateById(trimmed);
+    if (known) {
+      return [known];
+    }
+
+    return [{
+      lawId: trimmed,
+      lawTitle: trimmed,
+      lawType: 'Unknown',
+      sourceUrl: `https://laws.e-gov.go.jp/law/${trimmed}`,
+      aliases: [],
+    }];
+  }
+
+  const strict = resolveLawNameStrict(trimmed);
+  if (strict.lawId) {
+    return [{
+      lawId: strict.lawId,
+      lawTitle: strict.name,
+      lawType: inferLawType(strict.name),
+      sourceUrl: `https://laws.e-gov.go.jp/law/${strict.lawId}`,
+      aliases: LAW_ALIASES_BY_TITLE.get(strict.name) ?? [],
+    }];
+  }
+
+  const lowered = trimmed.toLocaleLowerCase('ja-JP');
+  const matches = new Map<string, LawRegistryCandidate>();
+
+  for (const [lawTitle, lawId] of Object.entries(LAW_ID_MAP)) {
+    const aliases = LAW_ALIASES_BY_TITLE.get(lawTitle) ?? [];
+    const haystacks = [lawTitle, ...aliases];
+    if (!haystacks.some((value) => value.toLocaleLowerCase('ja-JP').includes(lowered))) {
+      continue;
+    }
+
+    matches.set(lawId, {
+      lawId,
+      lawTitle,
+      lawType: inferLawType(lawTitle),
+      sourceUrl: `https://laws.e-gov.go.jp/law/${lawId}`,
+      aliases,
+    });
+  }
+
+  return Array.from(matches.values()).sort((a, b) => a.lawTitle.localeCompare(b.lawTitle, 'ja-JP'));
 }

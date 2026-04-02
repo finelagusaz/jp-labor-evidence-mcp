@@ -1,48 +1,92 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getLawArticle, getLawToc } from '../lib/services/law-service.js';
+import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
+
+const getLawInputSchema = z.object({
+  law_name: z.string().min(1).max(200).describe(
+    '法令名または略称。例: "労働基準法", "労働安全衛生法", "雇用保険法", "健康保険法", "労基法", "安衛法", "派遣法", "育介法"'
+  ),
+  article: z.string().min(1).max(20).optional().describe(
+    '条文番号（format="toc"の場合は省略可）。例: "32", "36", "32の2", "第36条"'
+  ),
+  paragraph: z.number().int().positive().max(99).optional().describe(
+    '項番号（省略時は条文全体）。例: 1, 2'
+  ),
+  item: z.number().int().positive().max(999).optional().describe(
+    '号番号（省略時は項全体）。例: 1, 2'
+  ),
+  format: z.enum(['markdown', 'toc']).optional().describe(
+    '出力形式。"markdown"=条文全文（デフォルト）, "toc"=目次のみ（トークン節約）'
+  ),
+});
+
+const getLawOutputSchema = createToolEnvelopeSchema(
+  z.object({
+    source_type: z.literal('egov'),
+    canonical_id: z.string(),
+    law_title: z.string(),
+    law_name: z.string(),
+    article: z.string().optional(),
+    paragraph: z.number().optional(),
+    item: z.number().optional(),
+    format: z.enum(['markdown', 'toc']),
+    title: z.string(),
+    body: z.string(),
+    source_url: z.string(),
+    retrieved_at: z.string(),
+  })
+);
 
 export function registerGetLawTool(server: McpServer) {
-  server.tool(
+  server.registerTool(
     'get_law',
-    '日本の法令から特定の条文を取得する。e-Gov法令API v2を使用。略称にも対応（労基法→労働基準法、安衛法→労働安全衛生法 等）。',
     {
-      law_name: z.string().min(1).max(200).describe(
-        '法令名または略称。例: "労働基準法", "労働安全衛生法", "雇用保険法", "健康保険法", "労基法", "安衛法", "派遣法", "育介法"'
-      ),
-      article: z.string().min(1).max(20).optional().describe(
-        '条文番号（format="toc"の場合は省略可）。例: "32", "36", "32の2", "第36条"'
-      ),
-      paragraph: z.number().int().positive().max(99).optional().describe(
-        '項番号（省略時は条文全体）。例: 1, 2'
-      ),
-      item: z.number().int().positive().max(999).optional().describe(
-        '号番号（省略時は項全体）。例: 1, 2'
-      ),
-      format: z.enum(['markdown', 'toc']).optional().describe(
-        '出力形式。"markdown"=条文全文（デフォルト）, "toc"=目次のみ（トークン節約）'
-      ),
+      description: '非推奨。日本の法令から特定の条文を取得する旧ツール。新規利用では resolve_law と get_article を使用すること。',
+      inputSchema: getLawInputSchema,
+      outputSchema: getLawOutputSchema,
     },
     async (args) => {
       try {
         if (args.format === 'toc') {
           const result = await getLawToc({ lawName: args.law_name });
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `# ${result.lawTitle} — 目次\n\n${result.toc}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
-            }],
+          const envelope = {
+            status: 'ok' as const,
+            retryable: false,
+            degraded: false,
+            warnings: [],
+            partial_failures: [],
+            data: {
+              source_type: 'egov' as const,
+              canonical_id: result.egovUrl.split('/').pop() ?? args.law_name,
+              law_title: result.lawTitle,
+              law_name: args.law_name,
+              format: 'toc' as const,
+              title: `${result.lawTitle} — 目次`,
+              body: result.toc,
+              source_url: result.egovUrl,
+              retrieved_at: isoNow(),
+            },
           };
+          return createToolResult(
+            envelope,
+            `# ${result.lawTitle} — 目次\n\n${result.toc}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+          );
         }
 
         if (!args.article) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'エラー: 条文番号（article）を指定してください。目次を取得する場合は format="toc" を指定してください。',
-            }],
-            isError: true,
-          };
+          return createToolResult(
+            {
+              status: 'invalid',
+              error_code: 'validation',
+              retryable: false,
+              degraded: false,
+              warnings: [],
+              partial_failures: [],
+              data: null,
+            },
+            'エラー: 条文番号（article）を指定してください。目次を取得する場合は format="toc" を指定してください。',
+          );
         }
 
         const result = await getLawArticle({
@@ -57,21 +101,39 @@ export function registerGetLawTool(server: McpServer) {
         const articleDisplay = /^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`;
         const paraDisplay = args.paragraph ? `第${args.paragraph}項` : '';
         const itemDisplay = args.item ? `第${args.item}号` : '';
+        const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
+        const envelope = {
+          status: 'ok' as const,
+          retryable: false,
+          degraded: false,
+          warnings: [],
+          partial_failures: [],
+          data: {
+            source_type: 'egov' as const,
+            canonical_id: result.egovUrl.split('/').pop() ?? args.law_name,
+            law_title: result.lawTitle,
+            law_name: args.law_name,
+            article: args.article,
+            paragraph: args.paragraph,
+            item: args.item,
+            format: 'markdown' as const,
+            title,
+            body: `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`,
+            source_url: result.egovUrl,
+            retrieved_at: isoNow(),
+          },
+        };
 
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `# ${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}\n${result.articleCaption ? `（${result.articleCaption}）\n` : ''}\n${result.text}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
-          }],
-        };
+        return createToolResult(
+          envelope,
+          `# ${title}\n${result.articleCaption ? `（${result.articleCaption}）\n` : ''}\n${result.text}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+        );
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `エラー: ${error instanceof Error ? error.message : String(error)}`,
-          }],
-          isError: true,
-        };
+        const envelope = mapErrorToEnvelope(error);
+        return createToolResult(
+          envelope,
+          `エラー: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
   );

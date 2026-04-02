@@ -1,5 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerGetArticleTool } from './tools/get-article.js';
 import { registerGetLawTool } from './tools/get-law.js';
+import { registerResolveLawTool } from './tools/resolve-law.js';
 import { registerSearchLawTool } from './tools/search-law.js';
 import { registerSearchMhlwTsutatsuTool } from './tools/search-mhlw-tsutatsu.js';
 import { registerGetMhlwTsutatsuTool } from './tools/get-mhlw-tsutatsu.js';
@@ -23,7 +25,7 @@ export function createServer(): McpServer {
 ## 利用ルール
 - 条文や通達に言及する場合は、必ず本サーバーのツールで取得した一次情報に基づくこと
 - 取得した原文を引用する場合は、出典URLを明記すること
-- 曖昧な法令名で get_law を呼ばず、必要なら search_law で正式名称または law_id を確認すること
+- 法令本文の取得は resolve_law で law_id を確定し、その後 get_article を使うこと
 - ツール呼び出しが失敗した場合は、失敗を明示し、別ツールまたは別条件で再試行すること
 
 ## 取得対象外
@@ -35,7 +37,9 @@ export function createServer(): McpServer {
   );
 
   // 法令ツール（e-Gov API v2）
-  registerGetLawTool(server);       // get_law: 条文取得
+  registerResolveLawTool(server);   // resolve_law: 法令候補の確定
+  registerGetArticleTool(server);   // get_article: law_id 指定で条文取得
+  registerGetLawTool(server);       // get_law: 旧互換ツール（非推奨）
   registerSearchLawTool(server);    // search_law: 法令キーワード検索
 
   // 厚労省通達ツール（法令等データベース）

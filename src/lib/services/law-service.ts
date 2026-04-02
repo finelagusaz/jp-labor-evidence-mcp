@@ -7,6 +7,7 @@ import { fetchLawData, searchLaws, getEgovUrl } from '../egov-client.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import type { EgovLawSearchResult } from '../types.js';
+import { resolveLawCandidates, type LawRegistryCandidate } from '../law-registry.js';
 
 export interface GetLawArticleResult {
   lawTitle: string;
@@ -33,6 +34,12 @@ export interface SearchLawResultItem {
 export interface SearchLawResult {
   keyword: string;
   results: SearchLawResultItem[];
+}
+
+export interface ResolveLawResult {
+  query: string;
+  resolution: 'resolved' | 'ambiguous' | 'not_found';
+  candidates: LawRegistryCandidate[];
 }
 
 /**
@@ -115,5 +122,49 @@ export async function searchLaw(params: {
       lawType: r.law_info.law_type,
       egovUrl: getEgovUrl(r.law_info.law_id),
     })),
+  };
+}
+
+export function resolveLaw(params: {
+  query: string;
+}): ResolveLawResult {
+  const query = params.query.trim();
+  if (!query) {
+    throw new ValidationError('法令名、略称、または law_id を指定してください。');
+  }
+
+  const candidates = resolveLawCandidates(query);
+  const resolution =
+    candidates.length === 0 ? 'not_found' :
+    candidates.length === 1 ? 'resolved' :
+    'ambiguous';
+
+  return {
+    query,
+    resolution,
+    candidates,
+  };
+}
+
+export async function getArticleByLawId(params: {
+  lawId: string;
+  article: string;
+  paragraph?: number;
+  item?: number;
+}): Promise<GetLawArticleResult & { lawId: string }> {
+  if (!params.lawId.trim()) {
+    throw new ValidationError('law_id を指定してください。');
+  }
+
+  const result = await getLawArticle({
+    lawName: params.lawId,
+    article: params.article,
+    paragraph: params.paragraph,
+    item: params.item,
+  });
+
+  return {
+    ...result,
+    lawId: params.lawId.trim(),
   };
 }

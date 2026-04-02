@@ -19,12 +19,19 @@ Claude などの上位クライアントが労務の質問に回答する際、*
 
 | ツール | 説明 |
 |---|---|
-| `get_law` | e-Gov法令APIから条文を取得。正式名称・略称・law_id + 条番号で指定 |
+| `resolve_law` | 法令名・略称・law_id から法令候補を確定 |
+| `get_article` | e-Gov法令APIから条文を取得。確定済みの law_id + 条番号で指定 |
 | `search_law` | キーワードで法令を検索 |
 | `search_mhlw_tsutatsu` | 厚労省法令等DBから通達をキーワード検索 |
 | `get_mhlw_tsutatsu` | 厚労省通達の本文を取得。data_idで指定 |
 | `search_jaish_tsutatsu` | JAISH安全衛生情報センターから安衛通達を検索 |
 | `get_jaish_tsutatsu` | JAISH安衛通達の本文を取得。URLで指定 |
+
+### 旧互換ツール
+
+| ツール | 説明 |
+|---|---|
+| `get_law` | 非推奨。旧来の法令取得ツール。新規利用では `resolve_law` と `get_article` を使用 |
 
 ## 対応法令（プリセット45法令）
 
@@ -113,15 +120,17 @@ npm run build
 
 > 「労働基準法第32条を取得して」
 
-→ `get_law(law_name="労働基準法", article="32")`
+→ `resolve_law(query="労働基準法")`
+→ `get_article(law_id="322AC0000000049", article="32")`
 
-`get_law` は曖昧な法令名を自動補完しません。候補が不明な場合は先に `search_law` で正式名称または `law_id` を確認してください。
+法令本文の取得は `resolve_law` で `law_id` を確定してから `get_article` を使うのが正規ルートです。`get_law` は旧互換のため残していますが、新規利用は推奨しません。
 
 ### 略称での取得
 
 > 「安衛法の第59条を見せて」
 
-→ `get_law(law_name="安衛法", article="59")`
+→ `resolve_law(query="安衛法")`
+→ `get_article(law_id="347AC0000000057", article="59")`
 
 ### 厚労省通達の検索
 
@@ -144,8 +153,8 @@ npm run build
 ### 一次情報取得ワークフロー
 
 1. 上位クライアントが論点に対応する法令・通達候補を特定する
-2. `search_law` で正式名称または `law_id` を確認する
-3. `get_law` / `search_mhlw_tsutatsu` / `search_jaish_tsutatsu` で一次情報を取得する
+2. `search_law` または `resolve_law` で `law_id` を確認する
+3. `get_article` / `search_mhlw_tsutatsu` / `search_jaish_tsutatsu` で一次情報を取得する
 4. 上位クライアントが取得結果を根拠として要約・説明する
 
 ## 出典

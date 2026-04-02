@@ -1,36 +1,66 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getJaishTsutatsu } from '../lib/services/jaish-tsutatsu-service.js';
+import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
+
+const getJaishInputSchema = z.object({
+  url: z.string().min(1).max(300).describe(
+    '通達ページのURL（パスまたは完全URL）。search_jaish_tsutatsu の検索結果から取得。例: "/anzen/hor/hombun/hor1-67/hor1-67-1-1-0.htm"'
+  ),
+});
+
+const getJaishOutputSchema = createToolEnvelopeSchema(
+  z.object({
+    source_type: z.literal('jaish'),
+    canonical_id: z.string(),
+    title: z.string(),
+    body: z.string(),
+    url: z.string(),
+    source_url: z.string(),
+    retrieved_at: z.string(),
+  })
+);
 
 export function registerGetJaishTsutatsuTool(server: McpServer) {
-  server.tool(
+  server.registerTool(
     'get_jaish_tsutatsu',
-    '安全衛生情報センター（JAISH）の通達本文を取得する。search_jaish_tsutatsu で取得した url を指定。',
     {
-      url: z.string().min(1).max(300).describe(
-        '通達ページのURL（パスまたは完全URL）。search_jaish_tsutatsu の検索結果から取得。例: "/anzen/hor/hombun/hor1-67/hor1-67-1-1-0.htm"'
-      ),
+      description: '安全衛生情報センター（JAISH）の通達本文を取得する。search_jaish_tsutatsu で取得した url を指定。',
+      inputSchema: getJaishInputSchema,
+      outputSchema: getJaishOutputSchema,
     },
     async (args) => {
       try {
         const result = await getJaishTsutatsu({ url: args.url });
 
         const title = result.title || '(タイトル取得不可)';
+        const envelope = {
+          status: 'ok' as const,
+          retryable: false,
+          degraded: false,
+          warnings: [],
+          partial_failures: [],
+          data: {
+            source_type: 'jaish' as const,
+            canonical_id: result.url,
+            title,
+            body: result.body,
+            url: result.url,
+            source_url: result.url,
+            retrieved_at: isoNow(),
+          },
+        };
 
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `# ${title}\n\n${result.body}\n\n---\n出典：安全衛生情報センター（中央労働災害防止協会）\nURL: ${result.url}`,
-          }],
-        };
+        return createToolResult(
+          envelope,
+          `# ${title}\n\n${result.body}\n\n---\n出典：安全衛生情報センター（中央労働災害防止協会）\nURL: ${result.url}`,
+        );
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `エラー: ${error instanceof Error ? error.message : String(error)}`,
-          }],
-          isError: true,
-        };
+        const envelope = mapErrorToEnvelope(error);
+        return createToolResult(
+          envelope,
+          `エラー: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
   );

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLawData } from '../src/lib/egov-client.js';
-import { resolveLawNameStrict } from '../src/lib/law-registry.js';
+import { resolveLawCandidates, resolveLawNameStrict } from '../src/lib/law-registry.js';
 import { ValidationError } from '../src/lib/errors.js';
 
 describe('law resolution', () => {
@@ -17,6 +17,12 @@ describe('law resolution', () => {
       name: '労働基準法',
       lawId: '322AC0000000049',
     });
+  });
+
+  it('部分一致では候補を複数返せる', () => {
+    const candidates = resolveLawCandidates('労働');
+    expect(candidates.length).toBeGreaterThan(1);
+    expect(candidates.some((candidate) => candidate.lawTitle === '労働基準法')).toBe(true);
   });
 
   it('未知の法令名は fetch 前に ValidationError で失敗する', async () => {
