@@ -6,7 +6,7 @@ import type { IndexSource } from './types.js';
 function resolveIndexDir(): string {
   return process.env.LABOR_LAW_MCP_INDEX_DIR?.trim()
     ? resolve(process.env.LABOR_LAW_MCP_INDEX_DIR)
-    : resolve(process.cwd(), '.labor-law-indexes');
+    : resolve(process.cwd(), '.jp-labor-evidence-indexes');
 }
 
 function ensureParentDir(filePath: string): void {

@@ -1,4 +1,4 @@
-# labor-law-mcp
+# jp-labor-evidence-mcp
 
 日本の労働・社会保険法令と行政通達の一次情報を取得する MCP サーバーです。
 
@@ -166,10 +166,10 @@
 
 ```json
 {
-  "mcpServers": {
-    "labor-law": {
+    "mcpServers": {
+    "jp-labor-evidence": {
       "command": "npx",
-      "args": ["-y", "labor-law-mcp"]
+      "args": ["-y", "jp-labor-evidence-mcp"]
     }
   }
 }
@@ -180,8 +180,8 @@
 この作業リポジトリを使う場合:
 
 ```bash
-git clone https://github.com/finelagusaz/labor-law-mcp.git
-cd labor-law-mcp
+git clone https://github.com/finelagusaz/jp-labor-evidence-mcp.git
+cd jp-labor-evidence-mcp
 npm install
 npm run build
 ```
@@ -191,20 +191,20 @@ npm run build
 ```json
 {
   "mcpServers": {
-    "labor-law": {
+    "jp-labor-evidence": {
       "command": "node",
-      "args": ["/path/to/labor-law-mcp/dist/index.js"]
+      "args": ["/path/to/jp-labor-evidence-mcp/dist/index.js"]
     }
   }
 }
 ```
 
 **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` に追加  
-**Claude Code**: `claude mcp add labor-law -- node /path/to/labor-law-mcp/dist/index.js`
+**Claude Code**: `claude mcp add jp-labor-evidence -- node /path/to/jp-labor-evidence-mcp/dist/index.js`
 
 ## Index と sync
 
-index 保存先は既定で `./.labor-law-indexes` です。`LABOR_LAW_MCP_INDEX_DIR` で変更できます。
+index 保存先は既定で `./.jp-labor-evidence-indexes` です。`LABOR_LAW_MCP_INDEX_DIR` で変更できます。
 
 ```bash
 npm run sync:indexes

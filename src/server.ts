@@ -16,7 +16,7 @@ import { registerPrompts } from './prompts/index.js';
 export function createServer(): McpServer {
   const server = new McpServer(
     {
-      name: 'labor-law-mcp',
+      name: 'jp-labor-evidence-mcp',
       version: '0.2.0',
     },
     {

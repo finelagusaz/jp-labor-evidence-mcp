@@ -58,7 +58,7 @@ async function safeLog(
   try {
     await server.sendLoggingMessage({
       level,
-      logger: 'labor-law-mcp/observability',
+      logger: 'jp-labor-evidence-mcp/observability',
       data,
     });
   } catch {

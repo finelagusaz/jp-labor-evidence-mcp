@@ -1,11 +1,11 @@
 {
-  "name": "labor-law-mcp",
+  "name": "jp-labor-evidence-mcp",
   "version": "0.2.0",
   "description": "MCP server for Japanese labor & social insurance law — e-Gov API, MHLW 通達, JAISH 安衛通達",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "labor-law-mcp": "dist/index.js"
+    "jp-labor-evidence-mcp": "dist/index.js"
   },
   "files": [
     "dist/**/*"
@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/finelagusaz/labor-law-mcp"
+    "url": "https://github.com/finelagusaz/jp-labor-evidence-mcp"
   },
   "keywords": [
     "mcp",
