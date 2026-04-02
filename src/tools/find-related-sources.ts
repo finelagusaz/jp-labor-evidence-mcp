@@ -51,9 +51,9 @@ export function registerFindRelatedSourcesTool(server: McpServer) {
         });
 
         const envelope = {
-          status: result.delegatedLaws.length > 0 ? 'ok' as const : 'partial' as const,
+          status: 'ok' as const,
           retryable: false,
-          degraded: result.delegatedLaws.length === 0,
+          degraded: false,
           warnings: result.warnings,
           partial_failures: [],
           data: {

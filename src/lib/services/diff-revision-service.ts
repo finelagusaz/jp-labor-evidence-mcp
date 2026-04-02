@@ -1,5 +1,6 @@
 import { buildEgovArticleCanonicalId } from '../canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../evidence-metadata.js';
+import { ValidationError } from '../errors.js';
 import type { WarningMessage } from '../types.js';
 import { getArticleByLawId } from './law-service.js';
 
@@ -65,15 +66,15 @@ export async function diffRevision(params: {
   const retrievedAt = new Date().toISOString();
   const baseEvidence = buildDiffEvidenceRecord(baseArticle, params.article, params.paragraph, params.item, retrievedAt);
   const headEvidence = buildDiffEvidenceRecord(headArticle, params.article, params.paragraph, params.item, retrievedAt);
-  const diffChunks = computeDiffChunks(baseEvidence.body, headEvidence.body);
-  const warnings: WarningMessage[] = [];
 
   if (baseEvidence.law_title !== headEvidence.law_title) {
-    warnings.push({
-      code: 'DIFFERENT_LAW_TITLES',
-      message: `比較対象の法令名が異なります: ${baseEvidence.law_title} / ${headEvidence.law_title}`,
-    });
+    throw new ValidationError(
+      `diff_revision は同一法令の改正前後比較のみ対応です: ${baseEvidence.law_title} / ${headEvidence.law_title}`
+    );
   }
+
+  const diffChunks = computeDiffChunks(baseEvidence.body, headEvidence.body);
+  const warnings: WarningMessage[] = [];
 
   return {
     status: 'ok',

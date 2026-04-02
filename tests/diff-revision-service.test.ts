@@ -51,7 +51,7 @@ describe('diffRevision', () => {
     ]);
   });
 
-  it('法令名が異なる場合は warning を返す', async () => {
+  it('法令名が異なる場合は validation error を返す', async () => {
     vi.mocked(getArticleByLawId)
       .mockResolvedValueOnce({
         lawId: 'base-law',
@@ -74,12 +74,10 @@ describe('diffRevision', () => {
         egovUrl: 'https://laws.e-gov.go.jp/law/head-law',
       });
 
-    const result = await diffRevision({
+    await expect(diffRevision({
       baseLawId: 'base-law',
       headLawId: 'head-law',
       article: '32',
-    });
-
-    expect(result.warnings[0]?.code).toBe('DIFFERENT_LAW_TITLES');
+    })).rejects.toThrow('同一法令の改正前後比較のみ対応');
   });
 });

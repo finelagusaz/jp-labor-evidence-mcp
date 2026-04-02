@@ -1,6 +1,7 @@
 import { buildEgovArticleCanonicalId, buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../evidence-metadata.js';
 import type { PartialFailure, WarningMessage } from '../types.js';
+import { ExternalApiError, ParseError } from '../errors.js';
 import { findRelatedSources, getArticleByLawId, getLawToc } from './law-service.js';
 import { searchJaishTsutatsu } from './jaish-tsutatsu-service.js';
 import { searchMhlwTsutatsu } from './mhlw-tsutatsu-service.js';
@@ -99,68 +100,45 @@ export async function getEvidenceBundle(params: {
   const relatedTsutatsu: EvidenceRecord[] = [];
 
   for (const delegatedLaw of related.delegatedLaws) {
-    const toc = await getLawToc({ lawName: delegatedLaw.lawId });
-    delegatedEvidence.push({
-      source_type: 'egov',
-      canonical_id: `egov:${delegatedLaw.lawId}:toc`,
-      title: `${delegatedLaw.lawTitle} — 目次`,
-      body: toc.toc,
-      source_url: toc.egovUrl,
-      retrieved_at: retrievedAt,
-      warnings: [],
-      version_info: joinVersionInfo([toc.lawNum, toc.promulgationDate]),
-      upstream_hash: computeUpstreamHash([delegatedLaw.lawId, delegatedLaw.lawTitle, toc.toc, toc.egovUrl]),
-    });
+    try {
+      const toc = await getLawToc({ lawName: delegatedLaw.lawId });
+      delegatedEvidence.push({
+        source_type: 'egov',
+        canonical_id: `egov:${delegatedLaw.lawId}:toc`,
+        title: `${delegatedLaw.lawTitle} — 目次`,
+        body: toc.toc,
+        source_url: toc.egovUrl,
+        retrieved_at: retrievedAt,
+        warnings: [],
+        version_info: joinVersionInfo([toc.lawNum, toc.promulgationDate]),
+        upstream_hash: computeUpstreamHash([delegatedLaw.lawId, delegatedLaw.lawTitle, toc.toc, toc.egovUrl]),
+      });
+    } catch (error) {
+      const failure = mapRelatedSourceFailure('egov', `toc:${delegatedLaw.lawId}`, error);
+      warnings.push(failure.warning);
+      partialFailures.push(failure.partialFailure);
+    }
   }
 
   for (const keyword of keywords) {
-    const mhlw = await searchMhlwTsutatsu({ keyword, page: 0 });
-    warnings.push(...mhlw.warnings);
-    partialFailures.push(...mhlw.partialFailures);
-    relatedTsutatsu.push(
-      ...mhlw.results.slice(0, params.mhlwLimit ?? 5).map((result) =>
-        buildRelatedTsutatsuCandidate({
-          sourceType: 'mhlw',
-          canonicalId: buildMhlwDocumentCanonicalId(result.dataId),
-          title: result.title,
-          sourceUrl: `https://www.mhlw.go.jp/web/t_doc?dataId=${result.dataId}&dataType=1&pageNo=1`,
-          retrievedAt,
-          warnings: [...mhlw.warnings],
-          versionInfo: joinVersionInfo([result.date, result.shubetsu]),
-          upstreamHash: computeUpstreamHash([result.dataId, result.title, result.date, result.shubetsu]),
-          date: result.date,
-          number: result.shubetsu,
-          scoringText: `${result.title} ${result.shubetsu} ${result.date}`,
-          lawTitle: primary.lawTitle,
-          article: params.article,
-          articleCaption: primary.articleCaption,
-          keywords,
-        })
-      )
-    );
-
-    if (params.includeJaish !== false) {
-      const jaish = await searchJaishTsutatsu({
-        keyword,
-        limit: params.jaishLimit ?? 5,
-        maxPages: params.jaishMaxPages ?? 5,
-      });
-      warnings.push(...jaish.warnings);
-      partialFailures.push(...jaish.failedPages);
+    try {
+      const mhlw = await searchMhlwTsutatsu({ keyword, page: 0 });
+      warnings.push(...mhlw.warnings);
+      partialFailures.push(...mhlw.partialFailures);
       relatedTsutatsu.push(
-        ...jaish.results.map((result) =>
+        ...mhlw.results.slice(0, params.mhlwLimit ?? 5).map((result) =>
           buildRelatedTsutatsuCandidate({
-            sourceType: 'jaish',
-            canonicalId: buildJaishCanonicalId(result.url),
+            sourceType: 'mhlw',
+            canonicalId: buildMhlwDocumentCanonicalId(result.dataId),
             title: result.title,
-            sourceUrl: result.url.startsWith('http') ? result.url : `https://www.jaish.gr.jp${result.url}`,
+            sourceUrl: `https://www.mhlw.go.jp/web/t_doc?dataId=${result.dataId}&dataType=1&pageNo=1`,
             retrievedAt,
-            warnings: [...jaish.warnings],
-            versionInfo: joinVersionInfo([result.date, result.number]),
-            upstreamHash: computeUpstreamHash([result.url, result.title, result.date, result.number]),
+            warnings: [...mhlw.warnings],
+            versionInfo: joinVersionInfo([result.date, result.shubetsu]),
+            upstreamHash: computeUpstreamHash([result.dataId, result.title, result.date, result.shubetsu]),
             date: result.date,
-            number: result.number,
-            scoringText: `${result.title} ${result.number} ${result.date}`,
+            number: result.shubetsu,
+            scoringText: `${result.title} ${result.shubetsu} ${result.date}`,
             lawTitle: primary.lawTitle,
             article: params.article,
             articleCaption: primary.articleCaption,
@@ -168,13 +146,54 @@ export async function getEvidenceBundle(params: {
           })
         )
       );
+    } catch (error) {
+      const failure = mapRelatedSourceFailure('mhlw', `search:${keyword}`, error);
+      warnings.push(failure.warning);
+      partialFailures.push(failure.partialFailure);
+    }
+
+    if (params.includeJaish !== false) {
+      try {
+        const jaish = await searchJaishTsutatsu({
+          keyword,
+          limit: params.jaishLimit ?? 5,
+          maxPages: params.jaishMaxPages ?? 5,
+        });
+        warnings.push(...jaish.warnings);
+        partialFailures.push(...jaish.failedPages);
+        relatedTsutatsu.push(
+          ...jaish.results.map((result) =>
+            buildRelatedTsutatsuCandidate({
+              sourceType: 'jaish',
+              canonicalId: buildJaishCanonicalId(result.url),
+              title: result.title,
+              sourceUrl: result.url.startsWith('http') ? result.url : `https://www.jaish.gr.jp${result.url}`,
+              retrievedAt,
+              warnings: [...jaish.warnings],
+              versionInfo: joinVersionInfo([result.date, result.number]),
+              upstreamHash: computeUpstreamHash([result.url, result.title, result.date, result.number]),
+              date: result.date,
+              number: result.number,
+              scoringText: `${result.title} ${result.number} ${result.date}`,
+              lawTitle: primary.lawTitle,
+              article: params.article,
+              articleCaption: primary.articleCaption,
+              keywords,
+            })
+          )
+        );
+      } catch (error) {
+        const failure = mapRelatedSourceFailure('jaish', `search:${keyword}`, error);
+        warnings.push(failure.warning);
+        partialFailures.push(failure.partialFailure);
+      }
     }
   }
 
   const dedupedRelated = dedupeEvidenceRecords(relatedTsutatsu)
     .sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0))
     .slice(0, 10);
-  const status = partialFailures.length > 0 || warnings.some((warning) => warning.code !== 'DELEGATED_EVIDENCE_NOT_IMPLEMENTED')
+  const status = partialFailures.length > 0
     ? 'partial'
     : 'ok';
 
@@ -186,6 +205,32 @@ export async function getEvidenceBundle(params: {
     warnings: dedupeWarnings(warnings),
     partial_failures: dedupePartialFailures(partialFailures),
     search_keywords: keywords,
+  };
+}
+
+function mapRelatedSourceFailure(
+  source: 'egov' | 'mhlw' | 'jaish',
+  target: string,
+  error: unknown,
+): { warning: WarningMessage; partialFailure: PartialFailure } {
+  const reason =
+    error instanceof ExternalApiError ? 'upstream_unavailable' :
+    error instanceof ParseError ? 'parse_error' :
+    error instanceof Error ? error.name :
+    'unknown_error';
+  const message =
+    error instanceof Error ? error.message : '関連情報の取得に失敗しました。';
+
+  return {
+    warning: {
+      code: `${source.toUpperCase()}_RELATED_SOURCE_FAILED`,
+      message: `${source} の関連情報取得に失敗しました: ${message}`,
+    },
+    partialFailure: {
+      source,
+      target,
+      reason,
+    },
   };
 }
 

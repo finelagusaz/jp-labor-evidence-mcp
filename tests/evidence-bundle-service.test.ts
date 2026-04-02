@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ExternalApiError } from '../src/lib/errors.js';
 
 vi.mock('../src/lib/services/law-service.js', () => ({
   getArticleByLawId: vi.fn(),
@@ -255,6 +256,56 @@ describe('getEvidenceBundle', () => {
     );
     expect(result.related_tsutatsu[0]?.relevance_score).toBeGreaterThan(
       result.related_tsutatsu[1]?.relevance_score ?? 0
+    );
+  });
+
+  it('関連探索が例外でも主条文を返し partial に落とす', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      lawNum: '昭和二十二年法律第四十九号',
+      promulgationDate: '1947-04-07',
+      article: '32',
+      articleCaption: '労働時間',
+      text: '使用者は、労働者に...',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      delegatedLaws: [{
+        lawId: '322CO0000000300',
+        lawTitle: '労働基準法施行令',
+        lawType: 'CabinetOrder',
+        sourceUrl: 'https://laws.e-gov.go.jp/law/322CO0000000300',
+        aliases: ['労基令'],
+      }],
+      searchKeywords: ['労働時間'],
+      warnings: [],
+    });
+    vi.mocked(getLawToc).mockRejectedValue(new ExternalApiError('toc timeout'));
+    vi.mocked(searchMhlwTsutatsu).mockRejectedValue(new ExternalApiError('mhlw timeout'));
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({
+      status: 'ok',
+      results: [],
+      pagesSearched: 1,
+      failedPages: [],
+      warnings: [],
+    });
+
+    const result = await getEvidenceBundle({
+      lawId: '322AC0000000049',
+      article: '32',
+    });
+
+    expect(result.status).toBe('partial');
+    expect(result.primary_evidence.canonical_id).toBe('egov:322AC0000000049:article:32');
+    expect(result.delegated_evidence).toHaveLength(0);
+    expect(result.partial_failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: 'egov', target: 'toc:322CO0000000300', reason: 'upstream_unavailable' }),
+        expect.objectContaining({ source: 'mhlw', target: 'search:労働時間', reason: 'upstream_unavailable' }),
+      ])
     );
   });
 });
