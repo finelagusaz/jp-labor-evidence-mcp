@@ -13,6 +13,9 @@ class EgovSourceAdapter extends HttpSourceAdapter {
       minIntervalMs: 200,
       timeoutMs: 30_000,
       userAgent: USER_AGENT,
+      maxConcurrency: 1,
+      circuitBreakerThreshold: 3,
+      circuitBreakerResetMs: 30_000,
     });
   }
 
