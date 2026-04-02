@@ -1,0 +1,45 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { jaishIndexCache, jaishPageCache } from '../src/lib/cache.js';
+import { jaishSourceAdapter } from '../src/lib/source-adapters/jaish-source-adapter.js';
+
+function toArrayBuffer(text: string): ArrayBuffer {
+  return Uint8Array.from(Buffer.from(text, 'utf-8')).buffer;
+}
+
+describe('jaishSourceAdapter', () => {
+  beforeEach(() => {
+    jaishIndexCache.clear();
+    jaishPageCache.clear();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('インデックス HTML を取得して decode/caching する', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(toArrayBuffer('<html>index</html>'), { status: 200, statusText: 'OK' })
+    );
+
+    const result1 = await jaishSourceAdapter.fetchIndexHtml('/user/anzen/hor/tsutatsu.html');
+    const result2 = await jaishSourceAdapter.fetchIndexHtml('/user/anzen/hor/tsutatsu.html');
+
+    expect(result1).toContain('index');
+    expect(result2).toContain('index');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('本文 HTML を取得して decode/caching する', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(toArrayBuffer('<html>page</html>'), { status: 200, statusText: 'OK' })
+    );
+
+    const result1 = await jaishSourceAdapter.fetchPageHtml('/anzen/hor/hombun/fixture.htm');
+    const result2 = await jaishSourceAdapter.fetchPageHtml('/anzen/hor/hombun/fixture.htm');
+
+    expect(result1).toContain('page');
+    expect(result2).toContain('page');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
