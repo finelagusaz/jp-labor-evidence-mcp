@@ -232,6 +232,12 @@ npm run release:check
 
 公開時は npm 側で package 名の空き確認、`npm login`、必要なら 2FA / access token の準備が別途必要です。
 
+## リリース運用
+
+- 変更履歴は [CHANGELOG.md](/Users/Eoh/workspace/labor-law-mcp/CHANGELOG.md) に記録します
+- npm 公開時は GitHub tag / Release も合わせて作成します
+- bug report と feature request は GitHub issue template から受け付けます
+
 ## 使い方の例
 
 ### 法令条文
