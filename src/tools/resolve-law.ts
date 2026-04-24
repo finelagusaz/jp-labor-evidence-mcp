@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
+import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
 import { resolveLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -41,6 +42,7 @@ export function registerResolveLawTool(server: McpServer) {
       const startedAt = Date.now();
       try {
         const result = await resolveLaw({ query: args.query });
+        const freshnessWarnings = getIndexWarningsForTool(['egov']).map(({ code, message }) => ({ code, message }));
         const envelope = {
           status:
             result.resolution === 'resolved' ? 'ok' as const :
@@ -48,7 +50,7 @@ export function registerResolveLawTool(server: McpServer) {
             'not_found' as const,
           retryable: false,
           degraded: false,
-          warnings: result.warnings,
+          warnings: [...freshnessWarnings, ...result.warnings],
           partial_failures: [],
           data: {
             query: result.query,

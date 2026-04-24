@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
+import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
 import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
@@ -69,11 +70,12 @@ export function registerSearchLawTool(server: McpServer) {
         const sourceUrl = 'https://laws.e-gov.go.jp/';
         const candidateBasis: CitationBasis = result.usedIndex ? 'index' : 'upstream';
         const indexLine = `検索経路: ${result.route}${result.indexMeta ? ` / freshness=${result.indexMeta.freshness}` : ''}`;
+        const freshnessWarnings = getIndexWarningsForTool(['egov']).map(({ code, message }) => ({ code, message }));
         const envelope = {
           status: result.results.length === 0 ? 'not_found' as const : 'ok' as const,
           retryable: false,
           degraded: result.route !== 'index_only',
-          warnings: result.warnings,
+          warnings: [...freshnessWarnings, ...result.warnings],
           partial_failures: [],
           data: {
             keyword: result.keyword,

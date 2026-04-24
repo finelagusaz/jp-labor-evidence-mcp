@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovArticleCanonicalId, buildEgovTocCanonicalId } from '../lib/canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
+import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
 import { getLawArticle, getLawToc } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -57,6 +58,7 @@ export function registerGetLawTool(server: McpServer) {
           code: 'DEPRECATED_TOOL',
           message: 'get_law は非推奨です。新規利用では resolve_law と get_article を使用してください。',
         };
+        const freshnessWarnings = getIndexWarningsForTool(['egov']).map(({ code, message }) => ({ code, message }));
         if (args.format === 'toc') {
           const result = await getLawToc({ lawName: args.law_name });
           const lawId = result.egovUrl.split('/').pop() ?? args.law_name;
@@ -64,7 +66,7 @@ export function registerGetLawTool(server: McpServer) {
             status: 'ok' as const,
             retryable: false,
             degraded: false,
-            warnings: [deprecationWarning],
+            warnings: [...freshnessWarnings, deprecationWarning],
             partial_failures: [],
             data: {
               source_type: 'egov' as const,
@@ -125,7 +127,7 @@ export function registerGetLawTool(server: McpServer) {
           status: 'ok' as const,
           retryable: false,
           degraded: false,
-          warnings: [deprecationWarning],
+          warnings: [...freshnessWarnings, deprecationWarning],
           partial_failures: [],
           data: {
             source_type: 'egov' as const,
