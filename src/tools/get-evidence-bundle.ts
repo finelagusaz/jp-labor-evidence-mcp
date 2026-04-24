@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
 import { getEvidenceBundle } from '../lib/services/evidence-bundle-service.js';
 import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -83,6 +84,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
     async (args) => {
       const startedAt = Date.now();
       try {
+        const freshnessWarnings = getIndexWarningsForTool(['egov', 'mhlw', 'jaish']).map(({ code, message }) => ({ code, message }));
         const result = await getEvidenceBundle({
           lawId: args.law_id,
           article: args.article,
@@ -95,17 +97,18 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
           jaishMaxPages: args.jaish_max_pages,
         });
 
+        const mergedWarnings = [...freshnessWarnings, ...result.warnings];
         const envelope = {
           status: result.status,
           retryable: false,
           degraded: result.status === 'partial',
-          warnings: result.warnings,
+          warnings: mergedWarnings,
           partial_failures: result.partial_failures,
           data: {
             primary_evidence: result.primary_evidence,
             delegated_evidence: result.delegated_evidence,
             related_tsutatsu: result.related_tsutatsu,
-            warnings: result.warnings,
+            warnings: mergedWarnings,
             partial_failures: result.partial_failures,
             search_keywords: result.search_keywords,
           },
@@ -117,8 +120,8 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
         const delegatedLines = result.delegated_evidence.map((evidence, index) =>
           `${index + 1}. ${evidence.title}\n${evidence.body ?? '本文なし'}`
         );
-        const warningSection = result.warnings.length > 0
-          ? `\n\n警告:\n${result.warnings.map((warning) => `- [${warning.code}] ${warning.message}`).join('\n')}`
+        const warningSection = mergedWarnings.length > 0
+          ? `\n\n警告:\n${mergedWarnings.map((warning) => `- [${warning.code}] ${warning.message}`).join('\n')}`
           : '';
         const partialSection = result.partial_failures.length > 0
           ? `\n\n部分失敗:\n${result.partial_failures.map((failure) => `- ${failure.source}:${failure.target} ${failure.reason}`).join('\n')}`

@@ -80,4 +80,34 @@ describe('tool freshness warnings integration', () => {
       expect(envelope.warnings.some((w) => w.code === 'BUNDLED_INDEX_AGED')).toBe(false);
     });
   });
+
+  describe('multi-source tool', () => {
+    it('find_related_sources: egov aged + mhlw stale + jaish stale で 3 件の warning', async () => {
+      const { indexMetadataRegistry } = await import('../src/lib/indexes/index-metadata.js');
+      indexMetadataRegistry.register({
+        source: 'mhlw',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 5,
+      });
+      indexMetadataRegistry.register({
+        source: 'jaish',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 5,
+      });
+      vi.setSystemTime(new Date(GENERATED_AT_MS + 61 * DAY));
+      const { createServer } = await import('../src/server.js');
+      const server = createServer();
+      const envelope = await callTool(server, 'find_related_sources', {
+        law_id: '322AC0000000049',
+        article: '36',
+      });
+      const codes = envelope.warnings.map((w) => w.code);
+      expect(codes).toContain('BUNDLED_INDEX_AGED');
+      expect(codes.filter((c) => c === 'RUNTIME_INDEX_STALE').length).toBe(2);
+    });
+  });
 });
