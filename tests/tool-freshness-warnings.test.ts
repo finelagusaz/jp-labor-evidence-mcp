@@ -29,6 +29,40 @@ describe('tool freshness warnings integration', () => {
     vi.useRealTimers();
   });
 
+  describe('mhlw / jaish 消費 tool', () => {
+    it('search_mhlw_tsutatsu: mhlw stale で RUNTIME_INDEX_STALE を含む', async () => {
+      const { createServer } = await import('../src/server.js');
+      const { indexMetadataRegistry: registry } = await import('../src/lib/indexes/index-metadata.js');
+      registry.register({
+        source: 'mhlw',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 5,
+      });
+      const server = createServer();
+      vi.useRealTimers();
+      const envelope = await callTool(server, 'search_mhlw_tsutatsu', { keyword: '36協定' });
+      expect(envelope.warnings.some((w) => w.code === 'RUNTIME_INDEX_STALE' && w.message.includes('厚生労働省通達'))).toBe(true);
+    }, 30000);
+
+    it('search_jaish_tsutatsu: jaish stale で RUNTIME_INDEX_STALE を含む', async () => {
+      const { createServer } = await import('../src/server.js');
+      const { indexMetadataRegistry: registry } = await import('../src/lib/indexes/index-metadata.js');
+      registry.register({
+        source: 'jaish',
+        generated_at: '2026-04-02T00:00:00.000Z',
+        last_success_at: '2026-04-02T00:00:00.000Z',
+        freshness: 'fresh',
+        entry_count: 5,
+      });
+      const server = createServer();
+      vi.useRealTimers();
+      const envelope = await callTool(server, 'search_jaish_tsutatsu', { keyword: '労災' });
+      expect(envelope.warnings.some((w) => w.code === 'RUNTIME_INDEX_STALE' && w.message.includes('JAISH'))).toBe(true);
+    }, 30000);
+  });
+
   describe('egov 消費 tool', () => {
     it('resolve_law: egov aged で BUNDLED_INDEX_AGED を含む', async () => {
       vi.setSystemTime(new Date(GENERATED_AT_MS + 61 * DAY));

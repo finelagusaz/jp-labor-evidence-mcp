@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { buildJaishCanonicalId } from '../lib/canonical-id.js';
 import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchJaishTsutatsu } from '../lib/services/jaish-tsutatsu-service.js';
+import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const searchJaishInputSchema = z.object({
@@ -60,6 +61,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
     },
     async (args) => {
       const startedAt = Date.now();
+      const freshnessWarnings = getIndexWarningsForTool(['jaish']).map(({ code, message }) => ({ code, message }));
       try {
         const result = await searchJaishTsutatsu({
           keyword: args.keyword,
@@ -75,7 +77,7 @@ export function registerSearchJaishTsutatsuTool(server: McpServer) {
           error_code: result.status === 'unavailable' ? 'upstream_unavailable' as const : undefined,
           retryable: result.status === 'unavailable',
           degraded: result.status !== 'ok' || result.warnings.length > 0 || result.route !== 'index_only',
-          warnings: result.warnings,
+          warnings: [...freshnessWarnings, ...result.warnings],
           partial_failures: result.failedPages,
           data: {
             keyword: args.keyword,
