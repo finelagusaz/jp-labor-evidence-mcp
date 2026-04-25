@@ -17,7 +17,7 @@ export function createServer(): McpServer {
   const server = new McpServer(
     {
       name: 'jp-labor-evidence-mcp',
-      version: '0.2.1',
+      version: '0.3.0',
     },
     {
       instructions: `日本の労働・社会保険法令と行政通達の一次情報を取得するMCPサーバーです。
@@ -36,7 +36,16 @@ export function createServer(): McpServer {
 - 判例・裁判例
 - 告示・指針など、本サーバーが対応していない資料
 
-これらは本サーバーの取得対象外であり、本サーバー単体では原文取得を保証しません。`,
+これらは本サーバーの取得対象外であり、本サーバー単体では原文取得を保証しません。
+
+## freshness warnings の扱い
+
+tool response の warnings[] に以下の code が含まれる場合、回答本文に根拠を引用する前に、日本語で短く disclaim してください：
+
+- BUNDLED_INDEX_AGED: 内蔵法令インデックスが古くなっています。最新改正が反映されていない可能性を利用者に伝えてください。
+- RUNTIME_INDEX_STALE: 通達／判例インデックスが古くなっています。同じキーワードで再検索を試すよう利用者に案内してください。
+
+warnings の message は既に利用者向け日本語になっています。paraphrase せず、そのまま引用することを推奨します。`,
     },
   );
 

@@ -2,6 +2,7 @@ import { getIndexFilePath, hasPersistedIndex } from './index-store.js';
 import type { IndexFreshness, IndexSnapshotMeta, IndexSource } from './types.js';
 
 const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type MutableIndexSnapshotMeta = {
   source: IndexSource;
@@ -84,25 +85,37 @@ class IndexMetadataRegistry {
 
   list(): IndexSnapshotMeta[] {
     return Array.from(this.snapshots.values())
-      .map((snapshot) => ({
-        source: snapshot.source,
-        generated_at: snapshot.generated_at,
-        last_success_at: snapshot.last_success_at,
-        last_failure_at: snapshot.last_failure_at,
-        freshness: snapshot.freshness ?? inferFreshness(snapshot.generated_at),
-        entry_count: snapshot.entry_count,
-        coverage_ratio: snapshot.coverage_ratio,
-        storage_path: hasPersistedIndex(snapshot.source) ? getIndexFilePath(snapshot.source) : undefined,
-        snapshot_id: snapshot.snapshot_id,
-        active_snapshot_id: snapshot.active_snapshot_id,
-        last_promotion_at: snapshot.last_promotion_at,
-        last_known_good_at: snapshot.last_known_good_at,
-        rollback_count: snapshot.rollback_count ?? 0,
-        covered_years: snapshot.covered_years,
-        query_hit_rate: snapshot.query_hit_rate,
-        last_sync_scope: snapshot.last_sync_scope,
-        cold_start_minimum_scope: snapshot.cold_start_minimum_scope,
-      }))
+      .map((snapshot) => {
+        const bundledAgeDays =
+          snapshot.source === 'egov'
+            ? (() => {
+                const generatedMs = Date.parse(snapshot.generated_at);
+                return Number.isNaN(generatedMs)
+                  ? undefined
+                  : Math.floor((Date.now() - generatedMs) / DAY_MS);
+              })()
+            : undefined;
+        return {
+          source: snapshot.source,
+          generated_at: snapshot.generated_at,
+          last_success_at: snapshot.last_success_at,
+          last_failure_at: snapshot.last_failure_at,
+          freshness: snapshot.freshness ?? inferFreshness(snapshot.generated_at),
+          entry_count: snapshot.entry_count,
+          coverage_ratio: snapshot.coverage_ratio,
+          bundled_age_days: bundledAgeDays,
+          storage_path: hasPersistedIndex(snapshot.source) ? getIndexFilePath(snapshot.source) : undefined,
+          snapshot_id: snapshot.snapshot_id,
+          active_snapshot_id: snapshot.active_snapshot_id,
+          last_promotion_at: snapshot.last_promotion_at,
+          last_known_good_at: snapshot.last_known_good_at,
+          rollback_count: snapshot.rollback_count ?? 0,
+          covered_years: snapshot.covered_years,
+          query_hit_rate: snapshot.query_hit_rate,
+          last_sync_scope: snapshot.last_sync_scope,
+          cold_start_minimum_scope: snapshot.cold_start_minimum_scope,
+        };
+      })
       .sort((a, b) => a.source.localeCompare(b.source, 'ja-JP'));
   }
 

@@ -27,6 +27,7 @@ export interface IndexSnapshotMeta {
   last_promotion_at?: string;
   last_known_good_at?: string;
   rollback_count?: number;
+  bundled_age_days?: number;
   covered_years?: number[];
   query_hit_rate?: number;
   last_sync_scope?: string;

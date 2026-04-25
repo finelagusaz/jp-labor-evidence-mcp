@@ -6,6 +6,8 @@ import { observabilityRegistry } from '../src/lib/observability.js';
 import { registerGetObservabilitySnapshotTool } from '../src/tools/get-observability-snapshot.js';
 import { createToolResult } from '../src/lib/tool-contract.js';
 
+const EGOV_GENERATED_AT = '2026-04-02T00:00:00.000Z';
+
 function createServerStub(registerTool: ReturnType<typeof vi.fn>): McpServer {
   return { registerTool } as unknown as McpServer;
 }
@@ -123,5 +125,32 @@ describe('observability', () => {
     expect(index?.covered_years).toEqual([2024]);
     expect(index?.query_hit_rate).toBe(0.25);
     expect(snapshot.degraded_reasons.some((reason) => reason.code === 'INDEX_COVERAGE_LOW' && reason.source === 'jaish')).toBe(true);
+  });
+
+  it('egov の snapshot に bundled_age_days が含まれる', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-12T00:00:00.000Z'));
+
+    // Register egov meta without bundled_age_days (as register sites do)
+    indexMetadataRegistry.register({
+      source: 'egov',
+      generated_at: EGOV_GENERATED_AT,
+      last_success_at: EGOV_GENERATED_AT,
+      freshness: 'unknown',
+      entry_count: 100,
+      last_sync_scope: 'bundled_registry',
+    });
+
+    const registerTool = vi.fn();
+    registerGetObservabilitySnapshotTool(createServerStub(registerTool));
+    const [, , handler] = registerTool.mock.calls[0];
+    const result = await handler();
+
+    const envelope = result.structuredContent as any;
+    const egov = envelope.data.indexes.find((i: any) => i.source === 'egov');
+    // 2026-04-12 - 2026-04-02 = 10 days
+    expect(egov?.bundled_age_days).toBe(10);
+
+    vi.useRealTimers();
   });
 });

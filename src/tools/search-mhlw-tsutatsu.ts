@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { buildMhlwDocumentCanonicalId } from '../lib/canonical-id.js';
 import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchMhlwTsutatsu } from '../lib/services/mhlw-tsutatsu-service.js';
+import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const searchMhlwInputSchema = z.object({
@@ -57,6 +58,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
     },
     async (args) => {
       const startedAt = Date.now();
+      const freshnessWarnings = getIndexWarningsForTool(['mhlw']).map(({ code, message }) => ({ code, message }));
       try {
         const result = await searchMhlwTsutatsu({
           keyword: args.keyword,
@@ -72,7 +74,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
           error_code: result.status === 'unavailable' ? 'upstream_unavailable' as const : undefined,
           retryable: result.status === 'unavailable',
           degraded: result.status !== 'ok' || result.warnings.length > 0 || result.route !== 'index_only',
-          warnings: result.warnings,
+          warnings: [...freshnessWarnings, ...result.warnings],
           partial_failures: result.partialFailures,
           data: {
             keyword: args.keyword,

@@ -18,7 +18,8 @@ describe('egov index', () => {
 
     expect(result.resolution).toBe('resolved');
     expect(result.candidates[0]?.lawId).toBe('322AC0000000049');
-    expect(result.meta.freshness).toBe('fresh');
+    expect(result.meta.freshness).toBe('unknown');
+    expect(result.meta.bundled_age_days).toBe(0);
   });
 
   it('部分一致検索を内部索引で返せる', async () => {

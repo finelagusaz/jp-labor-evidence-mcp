@@ -1,12 +1,13 @@
 import { LAW_ALIAS_MAP, LAW_ID_MAP, type LawRegistryCandidate, isEgovLawId, resolveLawNameStrict, getKnownLawCandidateById } from '../law-registry.js';
 import { buildLawIndexEntry } from './builders.js';
-import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
+import { indexMetadataRegistry } from './index-metadata.js';
 import { loadLastKnownGoodLawIndexSnapshot, loadLawIndexSnapshot, restoreCurrentFromLastKnownGood } from './index-store.js';
 import { promoteLawIndexSnapshot } from './promotion.js';
 import type { SerializedLawIndex } from './serialization.js';
 import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
 
 const GENERATED_AT = '2026-04-02T00:00:00.000Z';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function inferLawType(lawTitle: string): string {
   if (lawTitle.endsWith('施行令')) {
@@ -48,7 +49,7 @@ const DEFAULT_EGOV_INDEX_META: IndexSnapshotMeta = {
   source: 'egov',
   generated_at: GENERATED_AT,
   last_success_at: GENERATED_AT,
-  freshness: inferFreshness(GENERATED_AT),
+  freshness: 'unknown',
   entry_count: DEFAULT_LAW_INDEX_ENTRIES.length,
   coverage_ratio: 1,
   covered_years: [],
@@ -57,17 +58,27 @@ const DEFAULT_EGOV_INDEX_META: IndexSnapshotMeta = {
   cold_start_minimum_scope: 'bundled_registry',
 };
 
+function withBundledAge(meta: IndexSnapshotMeta): IndexSnapshotMeta {
+  if (meta.source !== 'egov') return meta;
+  const generatedMs = Date.parse(meta.generated_at);
+  if (Number.isNaN(generatedMs)) return meta;
+  return {
+    ...meta,
+    bundled_age_days: Math.floor((Date.now() - generatedMs) / DAY_MS),
+  };
+}
+
 let lawIndexEntries: LawIndexEntry[] = DEFAULT_LAW_INDEX_ENTRIES;
 let egovIndexMeta: IndexSnapshotMeta = DEFAULT_EGOV_INDEX_META;
 
 indexMetadataRegistry.register(egovIndexMeta);
 
 export function getEgovIndexMeta(): IndexSnapshotMeta {
-  return egovIndexMeta;
+  return withBundledAge(egovIndexMeta);
 }
 
 export function getBundledEgovIndexMeta(): IndexSnapshotMeta {
-  return DEFAULT_EGOV_INDEX_META;
+  return withBundledAge(DEFAULT_EGOV_INDEX_META);
 }
 
 export function getEgovIndexEntries(): LawIndexEntry[] {
@@ -76,7 +87,7 @@ export function getEgovIndexEntries(): LawIndexEntry[] {
 
 export function getEgovIndexSnapshot(): SerializedLawIndex {
   return {
-    meta: egovIndexMeta,
+    meta: withBundledAge(egovIndexMeta),
     entries: lawIndexEntries,
   };
 }
@@ -114,7 +125,7 @@ export function persistEgovIndex(): void {
     meta: {
       ...egovIndexMeta,
       entry_count: lawIndexEntries.length,
-      freshness: inferFreshness(egovIndexMeta.generated_at),
+      freshness: 'unknown',
     },
     entries: lawIndexEntries,
   });
@@ -132,13 +143,13 @@ export function resolveLawFromEgovIndex(query: string): {
 } {
   const trimmed = query.trim();
   if (!trimmed) {
-      return { resolution: 'not_found', candidates: [], meta: egovIndexMeta };
+      return { resolution: 'not_found', candidates: [], meta: withBundledAge(egovIndexMeta) };
   }
 
   if (isEgovLawId(trimmed)) {
     const known = getKnownLawCandidateById(trimmed);
     if (known) {
-      return { resolution: 'resolved', candidates: [known], meta: egovIndexMeta };
+      return { resolution: 'resolved', candidates: [known], meta: withBundledAge(egovIndexMeta) };
     }
     return {
       resolution: 'resolved',
@@ -149,7 +160,7 @@ export function resolveLawFromEgovIndex(query: string): {
         sourceUrl: `https://laws.e-gov.go.jp/law/${trimmed}`,
         aliases: [],
       }],
-      meta: egovIndexMeta,
+      meta: withBundledAge(egovIndexMeta),
     };
   }
 
@@ -158,7 +169,7 @@ export function resolveLawFromEgovIndex(query: string): {
     return {
       resolution: 'resolved',
       candidates: [toCandidate(findEntryByLawId(strict.lawId)!)],
-      meta: egovIndexMeta,
+      meta: withBundledAge(egovIndexMeta),
     };
   }
 
@@ -171,7 +182,7 @@ export function resolveLawFromEgovIndex(query: string): {
   return {
     resolution,
     candidates: matches,
-    meta: egovIndexMeta,
+    meta: withBundledAge(egovIndexMeta),
   };
 }
 
