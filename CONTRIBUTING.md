@@ -16,14 +16,14 @@ npm install
 
 主要コマンド:
 
-| コマンド | 用途 |
-|---|---|
-| `npm run dev` | tsx で `src/index.ts` を hot iteration |
-| `npm test` | vitest によるユニットテスト |
-| `npm run test:watch` | watch mode |
-| `npm run build` | tsc で `dist/` にビルド |
-| `npm run sync:indexes` | 内部 index の full sync |
-| `npm run release:check` | npm publish 前の必須 gate |
+| コマンド                | 用途                                   |
+|-------------------------|----------------------------------------|
+| `npm run dev`           | tsx で `src/index.ts` を hot iteration |
+| `npm test`              | vitest によるユニットテスト            |
+| `npm run test:watch`    | watch mode                             |
+| `npm run build`         | tsc で `dist/` にビルド                |
+| `npm run sync:indexes`  | 内部 index の full sync                |
+| `npm run release:check` | npm publish 前の必須 gate              |
 
 ## npm 公開前チェック
 
