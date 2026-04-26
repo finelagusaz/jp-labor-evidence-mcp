@@ -2,6 +2,17 @@
 
 このプロジェクトの主な変更を記録します。
 
+## [0.4.0] - YYYY-MM-DD
+
+### Added
+
+- bundled law registry に **calendar-aware boundary check** を追加
+  - 直近の 4/1 / 10/1 (JST) 施行境界を `GENERATED_AT` が跨いでいる場合、60日経過していなくても `BUNDLED_INDEX_AGED` warning を発火
+  - warning message に「直近の労働法令改正施行日 YYYY-MM-DD を跨いでいる」旨を追記
+- 新規 helper `getMostRecentLawRevisionBoundaryMs(now)` を `src/lib/indexes/freshness-warnings.ts` に追加
+  - `now` 時点での直近 4/1 / 10/1 JST 00:00 を UTC ms で返す純粋関数
+  - 境界 semantic は `<= now`、上流の判定は `generatedMs < boundary` の strict less-than で `equals` を「跨いでいない」として扱う
+
 ## [0.3.0] - 2026-04-25
 
 ### Changed
