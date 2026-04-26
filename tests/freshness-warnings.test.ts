@@ -150,6 +150,77 @@ describe('freshness-warnings', () => {
     });
   });
 
+  describe('getMostRecentLawRevisionBoundaryMs', () => {
+    const JST_OFFSET = 9 * 60 * 60 * 1000;
+    const jstMidnightUtcMs = (year: number, month: number, day: number) =>
+      Date.UTC(year, month - 1, day) - JST_OFFSET;
+
+    it('5月中旬は 直近の 4/1 JST 00:00 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = Date.parse('2026-05-15T12:00:00.000Z');
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2026, 4, 1));
+    });
+
+    it('11月中旬は 直近の 10/1 JST 00:00 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = Date.parse('2026-11-15T12:00:00.000Z');
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2026, 10, 1));
+    });
+
+    it('1月中旬は 前年の 10/1 JST 00:00 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = Date.parse('2026-01-15T12:00:00.000Z');
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2025, 10, 1));
+    });
+
+    it('JST での 4/1 00:00 ちょうど（UTC 3/31 15:00）は 4/1 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = jstMidnightUtcMs(2026, 4, 1);
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2026, 4, 1));
+    });
+
+    it('JST での 4/1 00:00 直前（UTC 3/31 14:59:59.999）は 前年の 10/1 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = jstMidnightUtcMs(2026, 4, 1) - 1;
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2025, 10, 1));
+    });
+
+    it('JST での 10/1 00:00 ちょうどは 10/1 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = jstMidnightUtcMs(2026, 10, 1);
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2026, 10, 1));
+    });
+
+    it('JST での 10/1 00:00 直前は 同年の 4/1 を返す', async () => {
+      const { getMostRecentLawRevisionBoundaryMs } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = jstMidnightUtcMs(2026, 10, 1) - 1;
+      expect(getMostRecentLawRevisionBoundaryMs(now)).toBe(jstMidnightUtcMs(2026, 4, 1));
+    });
+  });
+
+  describe('getBundledIndexWarnings - calendar boundary', () => {
+    it('60日以内でも 直近の 10/1 JST を跨いでいたら警告を返す', async () => {
+      // GENERATED_AT (2026-04-02T00:00:00Z) は 2026/10/1 JST より前
+      // now = 2026-10-01T15:00:00.000Z = 2026/10/02 00:00 JST （10/1 を跨いだ直後）
+      // 経過 ≈ 182 日 → 60日 check も既に発火するため、警告自体は元々出る
+      // よって本テストは「境界跨ぎ後にも適切な message 文言が出る」を verify する
+      const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = Date.parse('2026-10-01T15:00:00.000Z');
+      const warnings = getBundledIndexWarnings(now);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.code).toBe('BUNDLED_INDEX_AGED');
+      expect(warnings[0]?.message).toMatch(/4\/1|10\/1|施行/);
+    });
+
+    it('境界を跨いでいなければ 60日内では警告を返さない（既存挙動の維持）', async () => {
+      // GENERATED_AT = 2026-04-02T00:00:00Z（2026/04/02 09:00 JST、つまり 2026/4/1 境界の後）
+      // now = 2026-05-15 → 直近境界 = 2026/4/1 JST 00:00。generated はそれより後 → 跨いでいない
+      const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = Date.parse('2026-05-15T00:00:00.000Z');
+      expect(getBundledIndexWarnings(now)).toEqual([]);
+    });
+  });
+
   describe('emitStartupWarnings', () => {
     it('aged なら sendLoggingMessage と console.error を呼ぶ', async () => {
       const { emitStartupWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
