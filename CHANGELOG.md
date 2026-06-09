@@ -2,6 +2,16 @@
 
 このプロジェクトの主な変更を記録します。
 
+## [0.4.1] - YYYY-MM-DD
+
+### Changed
+
+- bundled law index の `GENERATED_AT` を `2026-06-10` に更新（再キュレーション）
+  - 2026 年施行の法改正（在職老齢年金の支給停止基準引上げ、社会保険の適用拡大・106 万円の壁撤廃、カスタマーハラスメント対策の義務化、被扶養者認定の見直し等）はいずれも既存法令の改正で e-Gov law_id は不変。本 index は law_id マッピングのみを保持し条文は e-Gov から live 取得するため、law set は現行と確認のうえ再スタンプ
+  - 経過 60 日超で発火していた `BUNDLED_INDEX_AGED` warning をリセット
+- 開発依存を semver 範囲内で更新（`@types/node` 20.19.42 / `tsx` 4.22.4 / `vitest` 4.1.8）。`package.json` の range は変更なし
+- freshness 系テストの時刻基準を単一の `GENERATED_AT_ISO` に一本化し、今後の `GENERATED_AT` 更新への追従を 1 行に簡素化
+
 ## [0.4.0] - 2026-04-26
 
 ### Added

@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
 
 const DAY = 24 * 60 * 60 * 1000;
-const GENERATED_AT_MS = Date.parse('2026-04-02T00:00:00.000Z');
+// Keep in sync with GENERATED_AT in src/lib/indexes/egov-index.ts.
+// All time references below derive from this single base so a GENERATED_AT
+// bump only requires editing this one line.
+const GENERATED_AT_ISO = '2026-06-10T00:00:00.000Z';
+const GENERATED_AT_MS = Date.parse(GENERATED_AT_ISO);
 
 describe('freshness-warnings', () => {
   beforeEach(() => {
@@ -50,8 +54,8 @@ describe('freshness-warnings', () => {
     it('generated_at から 7日以内なら空配列を返す', async () => {
       indexMetadataRegistry.register({
         source: 'mhlw',
-        generated_at: '2026-04-02T00:00:00.000Z',
-        last_success_at: '2026-04-02T00:00:00.000Z',
+        generated_at: GENERATED_AT_ISO,
+        last_success_at: GENERATED_AT_ISO,
         freshness: 'fresh',
         entry_count: 5,
       });
@@ -63,8 +67,8 @@ describe('freshness-warnings', () => {
     it('generated_at から 7日を超えると RUNTIME_INDEX_STALE を返す（mhlw）', async () => {
       indexMetadataRegistry.register({
         source: 'mhlw',
-        generated_at: '2026-04-02T00:00:00.000Z',
-        last_success_at: '2026-04-02T00:00:00.000Z',
+        generated_at: GENERATED_AT_ISO,
+        last_success_at: GENERATED_AT_ISO,
         freshness: 'fresh',
         entry_count: 5,
       });
@@ -82,8 +86,8 @@ describe('freshness-warnings', () => {
     it('jaish にも同じ判定を適用する', async () => {
       indexMetadataRegistry.register({
         source: 'jaish',
-        generated_at: '2026-04-02T00:00:00.000Z',
-        last_success_at: '2026-04-02T00:00:00.000Z',
+        generated_at: GENERATED_AT_ISO,
+        last_success_at: GENERATED_AT_ISO,
         freshness: 'fresh',
         entry_count: 5,
       });
@@ -108,8 +112,8 @@ describe('freshness-warnings', () => {
     it('mhlw のみ: mhlw stale のみ返す', async () => {
       indexMetadataRegistry.register({
         source: 'mhlw',
-        generated_at: '2026-04-02T00:00:00.000Z',
-        last_success_at: '2026-04-02T00:00:00.000Z',
+        generated_at: GENERATED_AT_ISO,
+        last_success_at: GENERATED_AT_ISO,
         freshness: 'fresh',
         entry_count: 5,
       });
@@ -124,15 +128,15 @@ describe('freshness-warnings', () => {
     it('multi-source: 該当するものを順に合成する', async () => {
       indexMetadataRegistry.register({
         source: 'mhlw',
-        generated_at: '2026-04-02T00:00:00.000Z',
-        last_success_at: '2026-04-02T00:00:00.000Z',
+        generated_at: GENERATED_AT_ISO,
+        last_success_at: GENERATED_AT_ISO,
         freshness: 'fresh',
         entry_count: 5,
       });
       indexMetadataRegistry.register({
         source: 'jaish',
-        generated_at: '2026-04-02T00:00:00.000Z',
-        last_success_at: '2026-04-02T00:00:00.000Z',
+        generated_at: GENERATED_AT_ISO,
+        last_success_at: GENERATED_AT_ISO,
         freshness: 'fresh',
         entry_count: 5,
       });
@@ -200,9 +204,9 @@ describe('freshness-warnings', () => {
 
   describe('getBundledIndexWarnings - calendar boundary', () => {
     it('60日以内でも 直近の 10/1 JST を跨いでいたら警告を返す', async () => {
-      // GENERATED_AT (2026-04-02T00:00:00Z) は 2026/10/1 JST より前
+      // GENERATED_AT (2026-06-10T00:00:00Z) は 2026/10/1 JST より前
       // now = 2026-10-01T15:00:00.000Z = 2026/10/02 00:00 JST （10/1 を跨いだ直後）
-      // 経過 ≈ 182 日 → 60日 check も既に発火するため、警告自体は元々出る
+      // 経過 ≈ 113 日 → 60日 check も既に発火するため、警告自体は元々出る
       // よって本テストは「境界跨ぎ後にも適切な message 文言が出る」を verify する
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
       const now = Date.parse('2026-10-01T15:00:00.000Z');
@@ -213,10 +217,10 @@ describe('freshness-warnings', () => {
     });
 
     it('境界を跨いでいなければ 60日内では警告を返さない（既存挙動の維持）', async () => {
-      // GENERATED_AT = 2026-04-02T00:00:00Z（2026/04/02 09:00 JST、つまり 2026/4/1 境界の後）
-      // now = 2026-05-15 → 直近境界 = 2026/4/1 JST 00:00。generated はそれより後 → 跨いでいない
+      // GENERATED_AT (2026-06-10) は 2026/4/1 境界の後。
+      // now = GENERATED_AT + 30日 → まだ 60日内、かつ直近境界 4/1 を generated が跨いでいない
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      const now = Date.parse('2026-05-15T00:00:00.000Z');
+      const now = GENERATED_AT_MS + 30 * DAY;
       expect(getBundledIndexWarnings(now)).toEqual([]);
     });
   });

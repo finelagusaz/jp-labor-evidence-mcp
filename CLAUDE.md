@@ -43,6 +43,8 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 - **永続 disk state**: `.jp-labor-evidence-indexes/` (gitignored) が `npm test` 失敗の原因に。`ENTRY_COUNT_DROP_TOO_LARGE` 系 promotion error が出たら `rm -rf .jp-labor-evidence-indexes` で復旧
 - **egov GENERATED_AT**: [src/lib/indexes/egov-index.ts:9](src/lib/indexes/egov-index.ts#L9) の literal。bundled 法令データの生成時刻、コード更新時に手動で書き換える
+  - **bump 時は freshness 結合テストも同じ日付へ追従必須**: [tests/freshness-warnings.test.ts](tests/freshness-warnings.test.ts) の `GENERATED_AT_ISO`、[tests/tool-freshness-warnings.test.ts](tests/tool-freshness-warnings.test.ts) の `GENERATED_AT_MS`、[tests/egov-index.test.ts](tests/egov-index.test.ts) の `setSystemTime`。怠ると `BUNDLED_INDEX_AGED` の発火位置がズレて test が赤化する
+  - 一部 tool test (`tests/tool-wire-contract.test.ts` / `tests/find-related-sources-tool.test.ts`) は freshness を実時刻評価しており、GENERATED_AT から 60 日経過で再赤化する time-bomb（fake-timer 固定化は Issue #14 で追跡）
 - **CHANGELOG date**: `## [x.y.z] - YYYY-MM-DD` の placeholder は **release engineer が npm publish 時に置換**
 - **Version bump**: package.json + `src/server.ts` の `version: '...'` の 2 箇所、必ず両方更新
 - **Issue tracker**: `bugs.url` は `finelagusaz/jp-labor-evidence-mcp/issues`。upstream `kentaroajisaka/labor-law-mcp` には issue を立てない
