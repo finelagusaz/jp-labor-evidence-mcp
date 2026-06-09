@@ -4,7 +4,7 @@ describe('egov index', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     // within STALE_AFTER_MS window of GENERATED_AT (src/lib/indexes/egov-index.ts)
-    vi.setSystemTime(new Date('2026-04-02T12:00:00.000Z'));
+    vi.setSystemTime(new Date('2026-06-10T12:00:00.000Z'));
     vi.resetModules();
   });
 

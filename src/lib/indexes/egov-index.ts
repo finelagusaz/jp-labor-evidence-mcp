@@ -6,7 +6,7 @@ import { promoteLawIndexSnapshot } from './promotion.js';
 import type { SerializedLawIndex } from './serialization.js';
 import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
 
-const GENERATED_AT = '2026-04-02T00:00:00.000Z';
+const GENERATED_AT = '2026-06-10T00:00:00.000Z';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function inferLawType(lawTitle: string): string {

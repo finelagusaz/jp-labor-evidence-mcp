@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
 
 const DAY = 24 * 60 * 60 * 1000;
-const GENERATED_AT_MS = Date.parse('2026-04-02T00:00:00.000Z');
+const GENERATED_AT_MS = Date.parse('2026-06-10T00:00:00.000Z');
 
 async function callTool(server: McpServer, name: string, args: Record<string, unknown>) {
   const internal = server.server as unknown as {
