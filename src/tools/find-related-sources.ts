@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { findRelatedSources } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -45,7 +45,7 @@ export function registerFindRelatedSourcesTool(server: McpServer) {
     async (args) => {
       const startedAt = Date.now();
       try {
-        const freshnessWarnings = getIndexWarningsForTool(['egov', 'mhlw', 'jaish']).map(({ code, message }) => ({ code, message }));
+        const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov', 'mhlw', 'jaish']));
         const result = await findRelatedSources({
           lawId: args.law_id,
           article: args.article,

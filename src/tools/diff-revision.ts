@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope } from '../lib/tool-contract.js';
 import { diffRevision } from '../lib/services/diff-revision-service.js';
 
@@ -70,7 +70,7 @@ export function registerDiffRevisionTool(server: McpServer) {
           item: args.item,
         });
 
-        const freshnessWarnings = getIndexWarningsForTool(['egov']).map(({ code, message }) => ({ code, message }));
+        const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
         const envelope = {
           status: result.status,
           retryable: false,

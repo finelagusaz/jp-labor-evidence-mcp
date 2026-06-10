@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { buildMhlwCanonicalId } from '../lib/canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
 import { getMhlwTsutatsu } from '../lib/services/mhlw-tsutatsu-service.js';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const getMhlwInputSchema = z.object({
@@ -40,7 +40,7 @@ export function registerGetMhlwTsutatsuTool(server: McpServer) {
     },
     async (args) => {
       const startedAt = Date.now();
-      const freshnessWarnings = getIndexWarningsForTool(['mhlw']).map(({ code, message }) => ({ code, message }));
+      const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['mhlw']));
       try {
         const result = await getMhlwTsutatsu({
           dataId: args.data_id,

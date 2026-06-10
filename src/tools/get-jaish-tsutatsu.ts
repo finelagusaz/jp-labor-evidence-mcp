@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { buildJaishCanonicalId } from '../lib/canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
 import { getJaishTsutatsu } from '../lib/services/jaish-tsutatsu-service.js';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const getJaishInputSchema = z.object({
@@ -36,7 +36,7 @@ export function registerGetJaishTsutatsuTool(server: McpServer) {
     },
     async (args) => {
       const startedAt = Date.now();
-      const freshnessWarnings = getIndexWarningsForTool(['jaish']).map(({ code, message }) => ({ code, message }));
+      const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['jaish']));
       try {
         const result = await getJaishTsutatsu({ url: args.url });
 

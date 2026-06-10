@@ -273,4 +273,24 @@ describe('freshness-warnings', () => {
       stderrSpy.mockRestore();
     });
   });
+
+  describe('toWireWarnings', () => {
+    it('FreshnessWarning[] から source を落として {code, message} に揃える', async () => {
+      const { toWireWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      const wire = toWireWarnings([
+        { code: 'BUNDLED_INDEX_AGED', source: 'egov', message: 'm1' },
+        { code: 'RUNTIME_INDEX_STALE', source: 'mhlw', message: 'm2' },
+      ]);
+      expect(wire).toEqual([
+        { code: 'BUNDLED_INDEX_AGED', message: 'm1' },
+        { code: 'RUNTIME_INDEX_STALE', message: 'm2' },
+      ]);
+      expect(wire[0]).not.toHaveProperty('source');
+    });
+
+    it('空配列はそのまま空配列', async () => {
+      const { toWireWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      expect(toWireWarnings([])).toEqual([]);
+    });
+  });
 });

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { buildMhlwDocumentCanonicalId } from '../lib/canonical-id.js';
 import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchMhlwTsutatsu } from '../lib/services/mhlw-tsutatsu-service.js';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const searchMhlwInputSchema = z.object({
@@ -58,7 +58,7 @@ export function registerSearchMhlwTsutatsuTool(server: McpServer) {
     },
     async (args) => {
       const startedAt = Date.now();
-      const freshnessWarnings = getIndexWarningsForTool(['mhlw']).map(({ code, message }) => ({ code, message }));
+      const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['mhlw']));
       try {
         const result = await searchMhlwTsutatsu({
           keyword: args.keyword,

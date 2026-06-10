@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovArticleCanonicalId } from '../lib/canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getArticleByLawId } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -64,7 +64,7 @@ export function registerGetArticleTool(server: McpServer) {
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
         const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
         const versionInfo = joinVersionInfo([result.lawNum, result.promulgationDate]);
-        const freshnessWarnings = getIndexWarningsForTool(['egov']).map(({ code, message }) => ({ code, message }));
+        const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
 
         const envelope = {
           status: 'ok' as const,
