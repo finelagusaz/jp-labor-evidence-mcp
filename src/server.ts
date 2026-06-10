@@ -12,12 +12,15 @@ import { registerGetMhlwTsutatsuTool } from './tools/get-mhlw-tsutatsu.js';
 import { registerSearchJaishTsutatsuTool } from './tools/search-jaish-tsutatsu.js';
 import { registerGetJaishTsutatsuTool } from './tools/get-jaish-tsutatsu.js';
 import { registerPrompts } from './prompts/index.js';
+import { registerStatusResource } from './resources/status.js';
+
+const SERVER_VERSION = '0.4.2';
 
 export function createServer(): McpServer {
   const server = new McpServer(
     {
       name: 'jp-labor-evidence-mcp',
-      version: '0.4.2',
+      version: SERVER_VERSION,
     },
     {
       instructions: `日本の労働・社会保険法令と行政通達の一次情報を取得するMCPサーバーです。
@@ -68,6 +71,7 @@ warnings の message は既に利用者向け日本語になっています。pa
 
   // 観測性
   registerGetObservabilitySnapshotTool(server); // get_observability_snapshot: メトリクス確認
+  registerStatusResource(server, SERVER_VERSION); // mcp://jp-labor-evidence-mcp/status: freshness 状態
 
   // プロンプトテンプレート
   registerPrompts(server);
