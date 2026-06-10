@@ -339,4 +339,39 @@ describe('freshness-warnings', () => {
       stderrSpy.mockRestore();
     });
   });
+
+  describe('日付の JST 表示', () => {
+    it('runtime warning は UTC ではなく JST の日付を表示する（日跨ぎ）', async () => {
+      // 2026-06-09T15:30:00Z は UTC では 06-09 だが JST では 06-10 00:30
+      const generatedIso = '2026-06-09T15:30:00.000Z';
+      indexMetadataRegistry.register({
+        source: 'mhlw',
+        generated_at: generatedIso,
+        last_success_at: generatedIso,
+        freshness: 'fresh',
+        entry_count: 5,
+      });
+      const { getRuntimeIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = Date.parse(generatedIso) + 8 * DAY;
+      const message = getRuntimeIndexWarnings('mhlw', now)[0]?.message ?? '';
+      expect(message).toContain('最終同期: 2026-06-10 JST');
+      expect(message).not.toContain('2026-06-09');
+    });
+
+    it('bundled warning の生成日は JST 表記', async () => {
+      const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      const now = GENERATED_AT_MS + 61 * DAY;
+      const message = getBundledIndexWarnings(now)[0]?.message ?? '';
+      expect(message).toContain('生成日: 2026-06-10 JST');
+    });
+
+    it('boundary note の施行日は JST 表記（4/1・10/1 を UTC ズレなく表示）', async () => {
+      const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      // now = 2026-10-02 00:00 JST（10/1 JST 境界を跨いだ直後）
+      const now = Date.parse('2026-10-01T15:00:00.000Z');
+      const message = getBundledIndexWarnings(now)[0]?.message ?? '';
+      expect(message).toContain('施行日 2026-10-01 JST');
+      expect(message).not.toContain('2026-09-30');
+    });
+  });
 });

@@ -20,8 +20,14 @@ const SOURCE_LABELS: Record<'mhlw' | 'jaish', string> = {
   jaish: '中央労働災害防止協会（JAISH）判例・資料',
 };
 
-function formatDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
+/**
+ * Formats a UTC ms timestamp as a `YYYY-MM-DD JST` calendar date in
+ * Asia/Tokyo. Target users are 日本の社労士 / HR なので JST 表記が自然。
+ * Shifting by the JST offset before reading the UTC date also fixes the
+ * off-by-one on JST-midnight boundary timestamps (e.g. 4/1 / 10/1 施行日).
+ */
+function formatJstDate(ms: number): string {
+  return `${new Date(ms + JST_OFFSET_MS).toISOString().slice(0, 10)} JST`;
 }
 
 /**
@@ -57,9 +63,9 @@ export function getBundledIndexWarnings(now: number = Date.now()): FreshnessWarn
   if (!aged && !crossedBoundary) return [];
   const ageDays = Math.floor(elapsedMs / DAY_MS);
   const boundaryNote = crossedBoundary
-    ? `（直近の労働法令改正施行日 ${formatDate(boundaryMs)} を跨いでいるため、4/1 / 10/1 施行改正が反映されていない可能性があります）`
+    ? `（直近の労働法令改正施行日 ${formatJstDate(boundaryMs)} を跨いでいるため、4/1 / 10/1 施行改正が反映されていない可能性があります）`
     : '';
-  const message = `内蔵法令インデックスの生成から ${ageDays} 日経過しています（生成日: ${formatDate(generatedMs)}）${boundaryNote}。最新の法令改正を反映するには、Claude Desktop / Claude Code を再起動してください（\`npx -y\` 起動の場合は再起動で最新パッケージが自動取得されます）。グローバルインストール利用時は \`npm update -g jp-labor-evidence-mcp\` を実行してください。`;
+  const message = `内蔵法令インデックスの生成から ${ageDays} 日経過しています（生成日: ${formatJstDate(generatedMs)}）${boundaryNote}。最新の法令改正を反映するには、Claude Desktop / Claude Code を再起動してください（\`npx -y\` 起動の場合は再起動で最新パッケージが自動取得されます）。グローバルインストール利用時は \`npm update -g jp-labor-evidence-mcp\` を実行してください。`;
   return [{ code: 'BUNDLED_INDEX_AGED', source: 'egov', message }];
 }
 
@@ -75,7 +81,7 @@ export function getRuntimeIndexWarnings(
   if (Number.isNaN(generatedMs)) return [];
   const ageDays = Math.floor((now - generatedMs) / DAY_MS);
   const label = SOURCE_LABELS[source];
-  const message = `${label}のインデックスが古くなっています（最終同期: ${formatDate(generatedMs)}、${ageDays}日前）。同じキーワードで再検索すると最新の情報が反映されます。`;
+  const message = `${label}のインデックスが古くなっています（最終同期: ${formatJstDate(generatedMs)}、${ageDays}日前）。同じキーワードで再検索すると最新の情報が反映されます。`;
   return [{ code: 'RUNTIME_INDEX_STALE', source, message }];
 }
 
