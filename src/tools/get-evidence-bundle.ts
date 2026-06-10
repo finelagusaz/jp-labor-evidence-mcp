@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getIndexWarningsForTool } from '../lib/indexes/freshness-warnings.js';
+import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getEvidenceBundle } from '../lib/services/evidence-bundle-service.js';
 import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
@@ -84,7 +84,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
     async (args) => {
       const startedAt = Date.now();
       try {
-        const freshnessWarnings = getIndexWarningsForTool(['egov', 'mhlw', 'jaish']).map(({ code, message }) => ({ code, message }));
+        const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov', 'mhlw', 'jaish']));
         const result = await getEvidenceBundle({
           lawId: args.law_id,
           article: args.article,

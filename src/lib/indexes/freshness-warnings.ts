@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getEgovIndexMeta } from './egov-index.js';
 import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
 import type { IndexSource } from './types.js';
+import type { WarningMessage } from '../types.js';
 
 export const BUNDLED_AGE_THRESHOLD_DAYS = 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -91,6 +92,15 @@ export function getIndexWarningsForTool(
     }
   }
   return warnings;
+}
+
+/**
+ * Strips the internal `source` field so a `FreshnessWarning` matches the
+ * `WarningMessage` ({code, message}) shape carried on tool envelopes. Centralised
+ * so a future `WarningMessage` shape change touches one place, not every handler.
+ */
+export function toWireWarnings(warnings: FreshnessWarning[]): WarningMessage[] {
+  return warnings.map(({ code, message }) => ({ code, message }));
 }
 
 export async function emitStartupWarnings(
