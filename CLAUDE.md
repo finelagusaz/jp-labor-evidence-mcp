@@ -37,7 +37,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 - 時刻依存: `vi.useFakeTimers()` + `vi.setSystemTime(new Date(...))` + `afterEach(() => vi.useRealTimers())`
 - module-load-time の挙動を test: `vi.resetModules()` + 動的 `import()`（参考: [tests/egov-index.test.ts](tests/egov-index.test.ts)）
-- Tool integration test: `server.server._requestHandlers.get('tools/call')` で handler 直叩き（MCP SDK 1.29.0 internal、Issue #7 で代替経路追跡中）
+- Tool integration test: SDK private field アクセス（`server.server._requestHandlers.get('tools/call')`、`_instructions`）は [tests/test-helpers/mcp-internals.ts](tests/test-helpers/mcp-internals.ts) に集約済み（#7）。tool 呼び出しは `callTool(server, name, args)`、instructions は `getServerInstructions(server)` を使う。SDK を bump すると [tests/mcp-internals.test.ts](tests/mcp-internals.test.ts) の version-guard が赤化するので、private field を再検証して `MCP_SDK_PINNED_VERSION` を更新する
 - Registry seed test: `indexMetadataRegistry.register({...})` で fake meta を直接投入
 
 ## Gotchas
