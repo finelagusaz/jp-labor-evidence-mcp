@@ -79,10 +79,35 @@ export function getRuntimeIndexWarnings(
   return [{ code: 'RUNTIME_INDEX_STALE', source, message }];
 }
 
+const SUPPRESS_FRESHNESS_ENV = 'LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS';
+const FALSY_ENV_VALUES = new Set(['', '0', 'false', 'no', 'off']);
+
+/**
+ * Whether freshness warnings are suppressed via the
+ * `LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS` env var. Enabled for any value
+ * other than '' / '0' / 'false' / 'no' / 'off' (case-insensitive).
+ *
+ * Intended for intentionally-frozen bundles — historical-case reproduction,
+ * pinned regression environments, deliberate offline operation — where
+ * staleness warnings are noise. When enabled, both the startup notification
+ * (`emitStartupWarnings`) and the per-tool-response merge
+ * (`getIndexWarningsForTool`) are skipped. The low-level getters
+ * (`getBundledIndexWarnings` / `getRuntimeIndexWarnings`) stay pure so a status
+ * resource can still surface the true state.
+ */
+export function isFreshnessWarningsSuppressed(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const raw = env[SUPPRESS_FRESHNESS_ENV];
+  if (raw === undefined) return false;
+  return !FALSY_ENV_VALUES.has(raw.trim().toLowerCase());
+}
+
 export function getIndexWarningsForTool(
   sources: ReadonlyArray<IndexSource>,
   now: number = Date.now()
 ): FreshnessWarning[] {
+  if (isFreshnessWarningsSuppressed()) return [];
   const warnings: FreshnessWarning[] = [];
   for (const source of sources) {
     if (source === 'egov') {
@@ -107,6 +132,7 @@ export async function emitStartupWarnings(
   server: McpServer,
   now: number = Date.now()
 ): Promise<void> {
+  if (isFreshnessWarningsSuppressed()) return;
   const warnings = getBundledIndexWarnings(now);
   if (warnings.length === 0) return;
   for (const warning of warnings) {
