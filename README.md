@@ -116,6 +116,14 @@ npm run build
 |-----------|----------------------------------------------------------------------------|
 | `get_law` | 非推奨。旧来の法令取得。新規利用では `resolve_law` と `get_article` を使う |
 
+### リソース
+
+| リソース                              | 用途                                                                                      |
+|---------------------------------------|-------------------------------------------------------------------------------------------|
+| `mcp://jp-labor-evidence-mcp/status` | freshness 状態を on-demand で照会する読み取り専用リソース。各 index の `generated_at`・`freshness`・経過日数、現在有効な警告、package version を JSON で返す |
+
+freshness 警告は通常 tool response の `warnings[]` と起動時ログで reactive に通知されるが、本リソースは proactive に状態を確認できる。`LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS` で警告を抑止していても、`active_warnings` は**真の状態**を返す（`freshness_warnings_suppressed` フラグで抑止中か判別可能）。
+
 ## 使い方の例
 
 ### 法令条文
