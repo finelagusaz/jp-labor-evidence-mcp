@@ -13,14 +13,14 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - `npm test` / `npm run test:watch` — vitest
 - `npm run build` — tsc → `dist/`
 - `npm run release:check` — test + build + pack:dry-run、npm publish 前の必須 gate
-- `npm run sync:indexes[:full|:incremental]` — 内部 index の更新 script
+- `npm run sync:indexes[:full|:incremental]` — 内部 index の更新 script（**ネットワーク取得なし**。registry の bundled/seed を gitignored runtime store へ再シリアライズするだけ）
 - CI: `.github/workflows/ci.yml`（PR/push で Node 20/22/24 の test+build+pack）+ `release.yml`（自動 publish。下記 Release workflow 参照）
 
 ## Architecture
 
 - `src/index.ts` — bootstrap (stdio transport + observability reporter + emitStartupWarnings)
 - `src/server.ts` — `McpServer` factory、`instructions` field に LLM 向けガイダンス
-- `src/tools/*.ts` — 11 個の MCP tool。各 handler は envelope 構築時に warnings を merge
+- `src/tools/*.ts` — 12 個の MCP tool（うち `get_law` は deprecated）。各 handler は envelope 構築時に warnings を merge
 - `src/lib/indexes/` — egov / mhlw / jaish 内部索引（bundled vs runtime）
 - `src/lib/indexes/freshness-warnings.ts` — `getIndexWarningsForTool(sources)` ヘルパ
 - `src/lib/services/` — upstream API 呼び出しと normalize
