@@ -3,7 +3,7 @@
 ## Project
 
 MCP server providing primary-source Japanese labor law evidence (法令、行政通達、判例) to LLMs.
-- npm: `jp-labor-evidence-mcp` (currently v0.3.0)、stdio transport
+- npm: `jp-labor-evidence-mcp`（version は package.json 参照）、stdio transport
 - Target clients: Claude Desktop / Claude Code via `npx -y jp-labor-evidence-mcp`
 - Target users: 社労士 / HR / legal advisers (日本語が一次)
 
@@ -14,6 +14,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - `npm run build` — tsc → `dist/`
 - `npm run release:check` — test + build + pack:dry-run、npm publish 前の必須 gate
 - `npm run sync:indexes[:full|:incremental]` — 内部 index の更新 script
+- CI: `.github/workflows/ci.yml`（PR/push で Node 20/22/24 の test+build+pack）+ `release.yml`（自動 publish。下記 Release workflow 参照）
 
 ## Architecture
 
@@ -44,17 +45,25 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - **永続 disk state**: `.jp-labor-evidence-indexes/` (gitignored) が `npm test` 失敗の原因に。`ENTRY_COUNT_DROP_TOO_LARGE` 系 promotion error が出たら `rm -rf .jp-labor-evidence-indexes` で復旧
 - **egov GENERATED_AT**: [src/lib/indexes/egov-index.ts:9](src/lib/indexes/egov-index.ts#L9) の literal。bundled 法令データの生成時刻、コード更新時に手動で書き換える
   - **bump 時は freshness 結合テストも同じ日付へ追従必須**: [tests/freshness-warnings.test.ts](tests/freshness-warnings.test.ts) の `GENERATED_AT_ISO`、[tests/tool-freshness-warnings.test.ts](tests/tool-freshness-warnings.test.ts) の `GENERATED_AT_MS`、[tests/egov-index.test.ts](tests/egov-index.test.ts) の `setSystemTime`。怠ると `BUNDLED_INDEX_AGED` の発火位置がズレて test が赤化する
-  - 一部 tool test (`tests/tool-wire-contract.test.ts` / `tests/find-related-sources-tool.test.ts`) は freshness を実時刻評価しており、GENERATED_AT から 60 日経過で再赤化する time-bomb（fake-timer 固定化は Issue #14 で追跡）
-- **CHANGELOG date**: `## [x.y.z] - YYYY-MM-DD` の placeholder は **release engineer が npm publish 時に置換**
-- **Version bump**: package.json + `src/server.ts` の `version: '...'` の 2 箇所、必ず両方更新
+  - `tests/tool-wire-contract.test.ts` / `tests/find-related-sources-tool.test.ts` は `vi.setSystemTime(new Date(getEgovIndexMeta().generated_at))` で egov を常に fresh 固定（#14 で実時刻 time-bomb を解消）。生成時刻を production と同一ソースから導出するため GENERATED_AT bump 追従は不要
+- **CHANGELOG date**: 自動 publish 化により placeholder 運用は**廃止**。`## [x.y.z] - YYYY-MM-DD` は **version bump PR の時点で実日付を記入**する（merge = release のため）
+- **Version bump**: package.json + `src/server.ts` の `version: '...'` を更新し、`npm install` で `package-lock.json` の version も同期（計 3 ファイル）
+- **deps overrides**: `package.json` の `overrides` は `@modelcontextprotocol/sdk` 由来 transitive 脆弱性の暫定 pin（hono / path-to-regexp / qs / ip-address / fast-uri / @hono/node-server / express-rate-limit）。stdio 専用ゆえ実害は休眠だが audit ノイズ除去のため。**SDK がこれらを patched 版へ bump したら撤去・再評価**する
 - **Issue tracker**: `bugs.url` は `finelagusaz/jp-labor-evidence-mcp/issues`。upstream `kentaroajisaka/labor-law-mcp` には issue を立てない
 
 ## Release workflow
 
-1. PR review pass → main にマージ
-2. CHANGELOG の `YYYY-MM-DD` を実日付に置換
-3. `npm run release:check` で最終検証
-4. `npm publish` （`prepublishOnly` で自動実行）
+リリースは **GitHub Actions による自動 publish**（OIDC Trusted Publishing、`release.yml`）。npm token も 2FA も不要で provenance 署名付き。
+
+1. version bump（package.json + `src/server.ts`）+ `npm install` で `package-lock.json` 同期
+2. CHANGELOG に `## [x.y.z] - YYYY-MM-DD` を**実日付**で追記
+3. PR 作成 → `ci.yml`（Node 20/22/24 で test+build+pack）が gate
+4. main にマージ → `release.yml` が `package.json` 変更で発火。未公開 version のみ `npm publish --provenance` + `vX.Y.Z` タグ + GitHub release を自動生成
+5. `npm view jp-labor-evidence-mcp version dist-tags` と `dist.attestations`（provenance）で確認
+
+- npm 側 **Trusted Publisher は設定済**（repo `finelagusaz/jp-labor-evidence-mcp` / workflow `release.yml`、2026-06-10）
+- `release:check`（test+build+pack）は `prepublishOnly` と CI の両方で走る必須 gate
+- **fallback（手動）**: npm アカウントが publish 時 2FA を要求するため、手動 publish 時は人手で `! npm publish` + browser 認証が必要
 
 ## Documentation
 
