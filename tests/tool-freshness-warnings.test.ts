@@ -1,22 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
+import { callTool } from './test-helpers/mcp-internals.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const GENERATED_AT_MS = Date.parse('2026-06-10T00:00:00.000Z');
 
-async function callTool(server: McpServer, name: string, args: Record<string, unknown>) {
-  const internal = server.server as unknown as {
-    _requestHandlers: Map<string, (req: any) => Promise<any>>;
-  };
-  const handler = internal._requestHandlers.get('tools/call');
-  if (!handler) throw new Error('tools/call handler not registered');
-  const result = await handler({
-    method: 'tools/call',
-    params: { name, arguments: args },
-  } as any);
-  return result.structuredContent as { warnings: Array<{ code: string; message: string }> };
-}
+type WarningsEnvelope = { warnings: Array<{ code: string; message: string }> };
 
 describe('tool freshness warnings integration', () => {
   beforeEach(() => {
@@ -42,7 +31,7 @@ describe('tool freshness warnings integration', () => {
       });
       const server = createServer();
       vi.useRealTimers();
-      const envelope = await callTool(server, 'search_mhlw_tsutatsu', { keyword: '36協定' });
+      const envelope = await callTool<WarningsEnvelope>(server, 'search_mhlw_tsutatsu', { keyword: '36協定' });
       expect(envelope.warnings.some((w) => w.code === 'RUNTIME_INDEX_STALE' && w.message.includes('厚生労働省通達'))).toBe(true);
     }, 30000);
 
@@ -58,7 +47,7 @@ describe('tool freshness warnings integration', () => {
       });
       const server = createServer();
       vi.useRealTimers();
-      const envelope = await callTool(server, 'search_jaish_tsutatsu', { keyword: '労災' });
+      const envelope = await callTool<WarningsEnvelope>(server, 'search_jaish_tsutatsu', { keyword: '労災' });
       expect(envelope.warnings.some((w) => w.code === 'RUNTIME_INDEX_STALE' && w.message.includes('JAISH'))).toBe(true);
     }, 30000);
   });
@@ -68,7 +57,7 @@ describe('tool freshness warnings integration', () => {
       vi.setSystemTime(new Date(GENERATED_AT_MS + 61 * DAY));
       const { createServer } = await import('../src/server.js');
       const server = createServer();
-      const envelope = await callTool(server, 'resolve_law', { query: '労基法' });
+      const envelope = await callTool<WarningsEnvelope>(server, 'resolve_law', { query: '労基法' });
       expect(envelope.warnings.some((w) => w.code === 'BUNDLED_INDEX_AGED')).toBe(true);
     });
 
@@ -76,7 +65,7 @@ describe('tool freshness warnings integration', () => {
       vi.setSystemTime(new Date(GENERATED_AT_MS + 3 * DAY));
       const { createServer } = await import('../src/server.js');
       const server = createServer();
-      const envelope = await callTool(server, 'resolve_law', { query: '労基法' });
+      const envelope = await callTool<WarningsEnvelope>(server, 'resolve_law', { query: '労基法' });
       expect(envelope.warnings.some((w) => w.code === 'BUNDLED_INDEX_AGED')).toBe(false);
     });
   });
@@ -101,7 +90,7 @@ describe('tool freshness warnings integration', () => {
       vi.setSystemTime(new Date(GENERATED_AT_MS + 61 * DAY));
       const { createServer } = await import('../src/server.js');
       const server = createServer();
-      const envelope = await callTool(server, 'find_related_sources', {
+      const envelope = await callTool<WarningsEnvelope>(server, 'find_related_sources', {
         law_id: '322AC0000000049',
         article: '36',
       });
