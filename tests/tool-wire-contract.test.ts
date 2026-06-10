@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 vi.mock('../src/lib/services/law-service.js', () => ({
@@ -14,6 +14,7 @@ import { registerGetLawTool } from '../src/tools/get-law.js';
 import { registerSearchLawTool } from '../src/tools/search-law.js';
 import { registerResolveLawTool } from '../src/tools/resolve-law.js';
 import { registerGetArticleTool } from '../src/tools/get-article.js';
+import { getEgovIndexMeta } from '../src/lib/indexes/egov-index.js';
 
 type RegisterToolMock = ReturnType<typeof vi.fn>;
 
@@ -23,7 +24,16 @@ function createServerStub(registerTool: RegisterToolMock): McpServer {
 
 describe('tool wire contract', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    // Pin the clock to the bundled index's own generation time so egov freshness
+    // is always evaluated as "fresh"; keeps BUNDLED_INDEX_AGED out of tool
+    // warnings[0] regardless of wall-clock or future GENERATED_AT bumps (Issue #14).
+    vi.setSystemTime(new Date(getEgovIndexMeta().generated_at));
     vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('search_law は outputSchema と structuredContent を返す', async () => {
