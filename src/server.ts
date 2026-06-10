@@ -17,7 +17,7 @@ export function createServer(): McpServer {
   const server = new McpServer(
     {
       name: 'jp-labor-evidence-mcp',
-      version: '0.4.1',
+      version: '0.4.2',
     },
     {
       instructions: `日本の労働・社会保険法令と行政通達の一次情報を取得するMCPサーバーです。

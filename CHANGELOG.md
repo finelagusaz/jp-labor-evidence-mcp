@@ -2,6 +2,20 @@
 
 このプロジェクトの主な変更を記録します。
 
+## [0.4.2] - 2026-06-10
+
+### Security
+
+- `@modelcontextprotocol/sdk` の HTTP transport 系 transitive dependency に由来する `npm audit` 7 件（high 5 / moderate 2）を `package.json` の `overrides` で patched 版へ pin して解消
+  - `hono` `^4.12.25` / `path-to-regexp` `^8.4.2` / `qs` `^6.15.2` / `ip-address` `^10.2.0` / `fast-uri` `^3.1.2` / `@hono/node-server` `^1.19.13` / `express-rate-limit` `^8.2.2`
+  - 本サーバーは stdio transport 専用で `express` / `hono` の HTTP 経路は実行時に呼ばれないため実害は休眠だが、audit ノイズを除去。全 override は同一 major 内の patched 版で親パッケージの範囲制約と両立
+  - `overrides` は SDK が将来これらの dep を patched 版へ bump したら撤去すべき暫定措置
+
+### Changed
+
+- （CI）GitHub Actions を導入: `ci.yml`（PR / push で Node 20/22/24 マトリクスの test + build + pack）と、OIDC Trusted Publishing による `release.yml`（version bump が main に乗ると自動 publish + tag + GitHub release）
+- （テスト）freshness 依存テスト（`tool-wire-contract` / `find-related-sources`）の実時刻結合を fake-timer 固定化し、`GENERATED_AT` から 60 日経過で再赤化する time-bomb を解消
+
 ## [0.4.1] - 2026-06-10
 
 ### Changed
