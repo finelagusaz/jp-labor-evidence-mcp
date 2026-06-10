@@ -3,9 +3,9 @@ import { getEgovIndexMeta } from './egov-index.js';
 import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
 import type { IndexSource } from './types.js';
 import type { WarningMessage } from '../types.js';
+import { DAY_MS } from './time.js';
 
 export const BUNDLED_AGE_THRESHOLD_DAYS = 60;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const BUNDLED_AGE_THRESHOLD_MS = BUNDLED_AGE_THRESHOLD_DAYS * DAY_MS;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 

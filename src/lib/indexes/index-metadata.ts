@@ -1,8 +1,8 @@
 import { getIndexFilePath, hasPersistedIndex } from './index-store.js';
 import type { IndexFreshness, IndexSnapshotMeta, IndexSource } from './types.js';
+import { DAY_MS, computeBundledAgeDays } from './time.js';
 
-const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 7 * DAY_MS;
 
 type MutableIndexSnapshotMeta = {
   source: IndexSource;
@@ -88,12 +88,7 @@ class IndexMetadataRegistry {
       .map((snapshot) => {
         const bundledAgeDays =
           snapshot.source === 'egov'
-            ? (() => {
-                const generatedMs = Date.parse(snapshot.generated_at);
-                return Number.isNaN(generatedMs)
-                  ? undefined
-                  : Math.floor((Date.now() - generatedMs) / DAY_MS);
-              })()
+            ? computeBundledAgeDays(snapshot.generated_at)
             : undefined;
         return {
           source: snapshot.source,

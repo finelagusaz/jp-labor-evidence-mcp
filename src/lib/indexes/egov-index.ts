@@ -5,9 +5,9 @@ import { loadLastKnownGoodLawIndexSnapshot, loadLawIndexSnapshot, restoreCurrent
 import { promoteLawIndexSnapshot } from './promotion.js';
 import type { SerializedLawIndex } from './serialization.js';
 import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
+import { computeBundledAgeDays } from './time.js';
 
 const GENERATED_AT = '2026-06-10T00:00:00.000Z';
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function inferLawType(lawTitle: string): string {
   if (lawTitle.endsWith('施行令')) {
@@ -60,12 +60,9 @@ const DEFAULT_EGOV_INDEX_META: IndexSnapshotMeta = {
 
 function withBundledAge(meta: IndexSnapshotMeta): IndexSnapshotMeta {
   if (meta.source !== 'egov') return meta;
-  const generatedMs = Date.parse(meta.generated_at);
-  if (Number.isNaN(generatedMs)) return meta;
-  return {
-    ...meta,
-    bundled_age_days: Math.floor((Date.now() - generatedMs) / DAY_MS),
-  };
+  const bundledAgeDays = computeBundledAgeDays(meta.generated_at);
+  if (bundledAgeDays === undefined) return meta;
+  return { ...meta, bundled_age_days: bundledAgeDays };
 }
 
 let lawIndexEntries: LawIndexEntry[] = DEFAULT_LAW_INDEX_ENTRIES;
