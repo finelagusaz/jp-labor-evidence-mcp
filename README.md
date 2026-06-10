@@ -251,6 +251,7 @@ npm run sync:indexes:incremental
 - 通達検索は internal index 優先だが、coverage や freshness によって route は変わる
 - `coverage_below_threshold` のときは fallback を抑止することがある
 - `stale_but_usable` は stale index を使っているので、上位クライアント側で注意表示した方がよい
+- 内蔵法令／通達インデックスが古い場合、tool response の `warnings[]` と起動時ログに freshness 警告が出る。意図的に古い bundle を使う場合（過去事案の再現調査、バージョン固定の回帰環境、オフライン長期運用など）は `LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS=1` で抑止できる
 - `diff_revision` は真の改正履歴 API ではなく、同一法令の 2 つの `law_id` 比較である
 - 判例・裁判例は対象外
 

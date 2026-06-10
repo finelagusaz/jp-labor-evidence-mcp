@@ -293,4 +293,50 @@ describe('freshness-warnings', () => {
       expect(toWireWarnings([])).toEqual([]);
     });
   });
+
+  describe('freshness 抑止 (LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('未設定なら抑止しない', async () => {
+      const { isFreshnessWarningsSuppressed } = await import('../src/lib/indexes/freshness-warnings.js');
+      expect(isFreshnessWarningsSuppressed({})).toBe(false);
+    });
+
+    it('1 / true / yes / on は抑止（大文字小文字無視）', async () => {
+      const { isFreshnessWarningsSuppressed } = await import('../src/lib/indexes/freshness-warnings.js');
+      for (const v of ['1', 'true', 'TRUE', 'yes', 'on']) {
+        expect(isFreshnessWarningsSuppressed({ LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS: v })).toBe(true);
+      }
+    });
+
+    it('0 / false / no / off / 空文字は抑止しない', async () => {
+      const { isFreshnessWarningsSuppressed } = await import('../src/lib/indexes/freshness-warnings.js');
+      for (const v of ['0', 'false', 'no', 'off', '', '  ']) {
+        expect(isFreshnessWarningsSuppressed({ LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS: v })).toBe(false);
+      }
+    });
+
+    it('抑止時は getIndexWarningsForTool が aged でも空配列を返す', async () => {
+      vi.stubEnv('LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS', '1');
+      const { getIndexWarningsForTool } = await import('../src/lib/indexes/freshness-warnings.js');
+      const agedNow = GENERATED_AT_MS + 61 * DAY;
+      expect(getIndexWarningsForTool(['egov'], agedNow)).toEqual([]);
+    });
+
+    it('抑止時は emitStartupWarnings が aged でも何もしない', async () => {
+      vi.stubEnv('LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS', '1');
+      const { emitStartupWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
+      const sendLoggingMessage = vi.fn();
+      const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const agedNow = GENERATED_AT_MS + 61 * DAY;
+
+      await emitStartupWarnings({ sendLoggingMessage } as any, agedNow);
+
+      expect(sendLoggingMessage).not.toHaveBeenCalled();
+      expect(stderrSpy).not.toHaveBeenCalled();
+      stderrSpy.mockRestore();
+    });
+  });
 });
