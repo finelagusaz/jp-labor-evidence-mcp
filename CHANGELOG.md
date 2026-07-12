@@ -2,6 +2,20 @@
 
 このプロジェクトの主な変更を記録します。
 
+## [Unreleased]
+
+### Changed
+
+- （依存）major を一括更新: `zod` `^3.23.8` → `^4.4.3`（prod）、`typescript` `^5.7.0` → `^7.0.2`、`@types/node` `^20` → `^26.1.1`、`tsx` `^4.21.0` → `^4.23.0`（devDeps）。`vitest` は range 内で `4.1.10` へ。`@modelcontextprotocol/sdk` は `^1.26.0` のまま（既に range 内最新 `1.29.0` が入り `MCP_SDK_PINNED_VERSION` も追従済）
+  - `zod` 4: 利用面が `z.string/number/object/enum/array/boolean/literal` と `.optional/.describe/.min/.max/.nullable` 中心で破壊的変更に非抵触。`z.record(z.string(), z.number())` は既に 2 引数形式、`ZodError` の `.errors`/`.issues` 依存も無し。SDK の zod peer は `^3.25 || ^4.0` で互換、SDK 内部の zod も `4.4.3` に dedupe。**src のコード変更なしで移行完了**
+  - `typescript` 7（native compiler）: 自動 `@types` 取り込みが TS5 と異なり `node` グローバル型を解決できず build が失敗したため、`tsconfig.json` に `compilerOptions.types: ["node"]` を明示追加して解消（本プロジェクトの `@types` は node のみ・tests は build 対象外ゆえ副作用なし）
+  - `@types/node` 26: build / test とも通過。型（26）と実行環境保証の乖離は、下記の最低サポート Node 引き上げ（→ Node 24）で解消
+- （サポート）最低サポート Node を `>=24` に引き上げ、EOL 済みの Node 18 / 20 と Maintenance LTS の 22 を対象外に。`package.json` に `engines.node: ">=24"` を新設し、CI matrix を `[20, 22, 24]` → `[24, 26]`（Active LTS + Current）、README バッジを `>=18` → `>=24` へ更新。`@types/node` 26 の型と実際にテスト・保証する実行環境を一致させるための整合（Node 20 は 2026-03-24 EOL）。**最低 Node の引き上げは実質 breaking** ゆえ、次リリースは minor 以上を推奨
+
+### Security
+
+- `esbuild` の低 severity 脆弱性（GHSA-g7r4-m6w7-qqqr、Windows の dev server 限定の任意ファイル読取）を `npm audit fix` で `0.28.1` へ解消。本サーバーは vitest のテスト時にのみ esbuild を経由し dev server は使わないため実害は休眠だったが、`npm audit` を 0 件化
+
 ## [0.5.0] - 2026-06-10
 
 ### Added
