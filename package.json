@@ -3,6 +3,9 @@
   "version": "0.5.0",
   "description": "MCP server for Japanese labor and social insurance primary-source evidence",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "main": "dist/index.js",
   "bin": {
     "jp-labor-evidence-mcp": "dist/index.js"
@@ -47,12 +50,12 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "zod": "^3.23.8"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^26.1.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.0",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.18"
   },
   "overrides": {

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/jp-labor-evidence-mcp.svg)](https://www.npmjs.com/package/jp-labor-evidence-mcp)
 [![license](https://img.shields.io/npm/l/jp-labor-evidence-mcp.svg)](./LICENSE)
-[![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+[![node](https://img.shields.io/badge/node-%3E%3D24-brightgreen.svg)](https://nodejs.org)
 
 日本の労働・社会保険法令と行政通達の一次情報を取得する MCP サーバーです。
 
