@@ -26,6 +26,12 @@ function cleanValue(value: string | null | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/** law_revision_id から版固定 URL（/api/2/law_data/{id}）を導出。純粋。 */
+export function buildVersionPinnedUrl(lawRevisionId: string | undefined): string | undefined {
+  const id = cleanValue(lawRevisionId);
+  return id ? `${EGOV_LAW_DATA_API}/${id}` : undefined;
+}
+
 /**
  * revision_info を Evidence 用の機械可読メタへ正規化する。
  * API 名 → 出力名の写像はここに固定（mis-map 防止）:
@@ -47,9 +53,7 @@ export function buildRevisionMetadata(
     amendment_law_title: cleanValue(revisionInfo.amendment_law_title),
     current_revision_status: cleanValue(revisionInfo.current_revision_status),
     repeal_status: cleanValue(revisionInfo.repeal_status),
-    version_pinned_url: lawRevisionId
-      ? `${EGOV_LAW_DATA_API}/${lawRevisionId}`
-      : undefined,
+    version_pinned_url: buildVersionPinnedUrl(revisionInfo.law_revision_id),
   };
   const hasAny = Object.values(metadata).some((value) => value !== undefined);
   return hasAny ? metadata : undefined;
