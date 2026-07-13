@@ -8,7 +8,7 @@
 
 ## 背景
 
-egov（法令）索引は bundled データで、真のソースは [src/lib/law-registry.ts](../../../src/lib/law-registry.ts) の `LAW_ID_MAP`（**41法令**、実測確認済み）。`initializeEgovIndex()` がここから構築する。鮮度は `freshness: 'unknown'` 固定 + `bundled_age_days`（`GENERATED_AT` からの経過日数）で露出する。
+egov（法令）索引は bundled データで、真のソースは [src/lib/law-registry.ts](../../../src/lib/law-registry.ts) の `LAW_ID_MAP`（**41法令（照合の結果、労働基準法施行令の削除・船員保険法の修正で 40 に収束）**）。`initializeEgovIndex()` がここから構築する。鮮度は `freshness: 'unknown'` 固定 + `bundled_age_days`（`GENERATED_AT` からの経過日数）で露出する。
 
 - 現状 `GENERATED_AT` = `2026-06-10T00:00:00.000Z`（[egov-index.ts:10](../../../src/lib/indexes/egov-index.ts#L10)。**実リテラルは 10 行目**、`:9` は空行）
 - 本日 2026-07-13 時点で経過 **33日**。閾値 `BUNDLED_AGE_THRESHOLD_DAYS = 60`（[freshness-warnings.ts:8](../../../src/lib/indexes/freshness-warnings.ts#L8)）に未達 → `BUNDLED_INDEX_AGED` 警告は**未発火**
@@ -77,7 +77,7 @@ bump は egov 全エントリの `updatedAt` と meta（`generated_at` / `last_s
 #### 2. law-registry への手動反映
 
 - 差分（NAME_MISMATCH / NOT_FOUND）はレポートを人が確認し、`LAW_ID_MAP` / `LAW_ALIAS_MAP` を手で修正
-- 修正後は再照合し、**同一実行のレポートで全41件が `OK` に収束**させる（後述の bump ゲート参照）
+- 修正後は再照合し、**同一実行のレポートで全件（40件）が `OK` に収束**させる（後述の bump ゲート参照）
 - **文書追従（条件付き）**: registry を編集して**法令数や名称が変わった場合**は、以下も同一 PR で追従する。全件 OK で差分ゼロなら不要:
   - [README.md](../../../README.md) の「41 法令」表記（`:189` / `:199`）
   - [docs/supported-laws.md](../../../docs/supported-laws.md) の一覧（件数 `:3` および該当テーブル行）
@@ -88,7 +88,7 @@ bump は egov 全エントリの `updatedAt` と meta（`generated_at` / `last_s
 
 `GENERATED_AT` の書き換えは以下を**すべて満たす場合のみ**行う。「日付だけ動かすと鮮度指標が実態を偽る」という誠実性原則を、ゲートとして機械的に強制する。
 
-- **同一実行**の照合レポートで、全41件が `OK`。`NOT_FOUND` / `NAME_MISMATCH` / `ERROR` が **0件**（古い実行のレポートの流用を禁止）
+- **同一実行**の照合レポートで、全件（40件）が `OK`。`NOT_FOUND` / `NAME_MISMATCH` / `ERROR` が **0件**（古い実行のレポートの流用を禁止）
 - レポートの**検証実施日が bump 日（2026-07-13）と一致**（乖離があれば再実行）
 - スクリプトは**成功時のみ exit 0**、未確認が1件でも残れば非0で終了
 - 生成した**レポートを PR に証跡として添付**し、bump の裏付けを再現可能にする
@@ -160,7 +160,7 @@ fetchLawDataById(lawId) ──→ e-Gov API v2
 
 ## 検証（success criteria）
 
-- 照合レポートが「**同一実行で41件すべて OK**、`NOT_FOUND`/`NAME_MISMATCH`/`ERROR` が 0件」を示し、検証日が bump 日と一致
+- 照合レポートが「**同一実行で全件（40件）すべて OK**、`NOT_FOUND`/`NAME_MISMATCH`/`ERROR` が 0件」を示し、検証日が bump 日と一致
 - レポートが PR に添付されている
 - `npm test` 緑（追従漏れ・誤追従があれば freshness/`BUNDLED_INDEX_AGED`/`status-resource` 系が赤化して検知できる）
 - `npm run build` 成功、**かつ** `scripts/verify-egov-registry.ts` の型検査が別経路で通ること

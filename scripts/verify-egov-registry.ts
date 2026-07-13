@@ -5,9 +5,10 @@ import { writeFileSync } from 'node:fs';
 import { LAW_ID_MAP } from '../src/lib/law-registry.js';
 import { egovSourceAdapter } from '../src/lib/source-adapters/egov-source-adapter.js';
 import { extractLawTitle } from '../src/lib/egov-parser.js';
-import { verifyRegistry } from '../src/lib/indexes/registry-verification.js';
+import { verifyRegistry, isBumpGateSatisfied } from '../src/lib/indexes/registry-verification.js';
 
 const REPORT_PATH = process.env.EGOV_VERIFY_OUT ?? 'egov-verify-report.json';
+const bumpDate = process.env.EGOV_BUMP_DATE;
 
 async function main(): Promise<void> {
   const entries = Object.entries(LAW_ID_MAP);
@@ -41,7 +42,15 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
+
+  if (bumpDate && !isBumpGateSatisfied(report, bumpDate)) {
+    console.error(
+      `全件 OK だが検証日が bump 日と不一致: verifiedAt=${report.verifiedAt}, EGOV_BUMP_DATE=${bumpDate}。bump 日に再実行すること。`
+    );
+    process.exit(1);
+  }
   console.log('全件 OK。GENERATED_AT bump ゲート充足（検証日を bump 日と一致させること）。');
+  process.exit(0);
 }
 
 main().catch((error) => {

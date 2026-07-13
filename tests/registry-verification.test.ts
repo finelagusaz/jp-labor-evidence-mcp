@@ -15,6 +15,11 @@ describe('normalizeLawTitle', () => {
     expect(normalizeLawTitle(' 労働 基準法 ')).toBe(normalizeLawTitle('労働基準法'));
     expect(normalizeLawTitle('労働基準法')).toBe('労働基準法');
   });
+
+  it('NFKC で半角カナ・全角英字を正規化する', () => {
+    expect(normalizeLawTitle('ﾊﾟﾜﾊﾗ防止法')).toBe('パワハラ防止法');
+    expect(normalizeLawTitle('Ａ法')).toBe(normalizeLawTitle('A法'));
+  });
 });
 
 describe('classifyFetchError', () => {
@@ -118,5 +123,21 @@ describe('verifyRegistry', () => {
     );
     expect(report.results[0]?.status).toBe('NAME_MISMATCH');
     expect(report.results[0]?.actualName).toBe('労働基準法施行令');
+  });
+
+  it('非404 reject は ERROR に分類する', async () => {
+    const report = await verifyRegistry(
+      [['労働基準法', '322AC0000000049']],
+      async () => { throw new Error('HTTP 503 Service Unavailable — url'); },
+      '2026-07-13T02:00:00.000Z'
+    );
+    expect(report.counts.ERROR).toBe(1);
+    expect(report.allOk).toBe(false);
+  });
+
+  it('空 entries は total 0・allOk=false', async () => {
+    const report = await verifyRegistry([], async () => '', '2026-07-13T02:00:00.000Z');
+    expect(report.total).toBe(0);
+    expect(report.allOk).toBe(false);
   });
 });

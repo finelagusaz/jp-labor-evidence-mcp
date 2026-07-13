@@ -43,5 +43,8 @@ jobs:
       - name: Build package
         run: npm run build
 
+      - name: Typecheck maintainer scripts
+        run: npm run typecheck:scripts
+
       - name: Verify npm package contents
         run: npm pack --dry-run
