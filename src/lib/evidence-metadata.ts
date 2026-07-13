@@ -75,3 +75,42 @@ export function buildVersionInfoString(
     '※この施行日は法令全体の現行版を指し、引用した条文が改正されたとは限りません';
   return joinVersionInfo([base, segment]);
 }
+
+/**
+ * 現行施行版でない版・廃止/失効法令に対する警告を返す（入力領域に対し全域）。
+ * トリガ: current_revision_status が {undefined, 'CurrentEnforced'} 以外
+ *         または repeal_status が {undefined, 'None'} 以外。
+ * 既知 enum は状態別文言、未知の非現行値は fail-safe の汎用文言（raw 値併記）。
+ * message は lawTitle を接頭。revisionInfo 欠落・現行版時は空配列。純粋関数。
+ */
+export function getRevisionWarnings(
+  revisionInfo: EgovRevisionInfo | undefined,
+  lawTitle: string,
+): WarningMessage[] {
+  if (!revisionInfo) return [];
+  const status = cleanValue(revisionInfo.current_revision_status);
+  const repeal = cleanValue(revisionInfo.repeal_status);
+  const repealActive = repeal !== undefined && repeal !== 'None';
+  const notCurrent = status !== undefined && status !== 'CurrentEnforced';
+  if (!repealActive && !notCurrent) return [];
+
+  const repealDate = cleanValue(revisionInfo.repeal_date);
+  let body: string;
+  if (repeal === 'Repeal' || status === 'Repeal') {
+    body = `この法令は廃止されています${repealDate ? `（廃止日: ${repealDate}）` : ''}。現に効力を有しません。現行の法令を確認してください。`;
+  } else if (repeal === 'Expire') {
+    body = `この法令は期間満了により失効しています${repealDate ? `（失効日: ${repealDate}）` : ''}。現に効力を有しません。`;
+  } else if (repeal === 'LossOfEffectiveness') {
+    body = 'この法令は効力を喪失しています。現に効力を有しません。';
+  } else if (repeal === 'Suspend') {
+    body = 'この法令は効力が停止されています。適用の可否を確認してください。';
+  } else if (status === 'UnEnforced') {
+    body = 'この版はまだ施行されていません（未施行）。現在の施行版とは内容が異なる可能性があります。';
+  } else if (status === 'PreviousEnforced') {
+    body = 'この版は過去の施行版であり、現行版ではありません。より新しい施行版が存在します。';
+  } else {
+    const rawState = repealActive ? repeal : status;
+    body = `この法令は現行施行版ではない可能性があります（状態: ${rawState}）。現行の法令を確認してください。`;
+  }
+  return [{ code: 'LAW_NOT_CURRENTLY_ENFORCED', message: `${lawTitle}: ${body}` }];
+}

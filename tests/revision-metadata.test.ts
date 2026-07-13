@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildRevisionMetadata, buildVersionInfoString } from '../src/lib/evidence-metadata.js';
+import {
+  buildRevisionMetadata,
+  buildVersionInfoString,
+  getRevisionWarnings,
+} from '../src/lib/evidence-metadata.js';
 import type { EgovRevisionInfo } from '../src/lib/types.js';
 
 describe('buildRevisionMetadata', () => {
@@ -80,5 +84,34 @@ describe('buildVersionInfoString', () => {
       amendment_enforcement_comment: '公布の日から起算して一年を超えない範囲内において政令で定める日',
     });
     expect(s).toContain('施行期日規定: 公布の日から起算して');
+  });
+});
+
+describe('getRevisionWarnings', () => {
+  it('現行版 / revision 欠落 なら空配列', () => {
+    expect(getRevisionWarnings({ current_revision_status: 'CurrentEnforced', repeal_status: 'None' }, '労働基準法')).toEqual([]);
+    expect(getRevisionWarnings(undefined, '労働基準法')).toEqual([]);
+    expect(getRevisionWarnings({}, '労働基準法')).toEqual([]);
+  });
+
+  it('廃止（repeal_status=Repeal）で LAW_NOT_CURRENTLY_ENFORCED＋lawTitle 接頭＋廃止日', () => {
+    const w = getRevisionWarnings({ repeal_status: 'Repeal', repeal_date: '2020-04-01' }, '旧・某法');
+    expect(w[0]?.code).toBe('LAW_NOT_CURRENTLY_ENFORCED');
+    expect(w[0]?.message).toContain('旧・某法: ');
+    expect(w[0]?.message).toContain('廃止されています');
+    expect(w[0]?.message).toContain('2020-04-01');
+  });
+
+  it('current_revision_status 単独（PreviousEnforced）でも発火', () => {
+    const w = getRevisionWarnings({ current_revision_status: 'PreviousEnforced' }, '某法');
+    expect(w[0]?.message).toContain('過去の施行版');
+  });
+
+  it('未知 enum 値でも fallback 文言を返す（全域性）', () => {
+    const w = getRevisionWarnings({ current_revision_status: 'SomeNewStatus' }, '某法');
+    expect(w).toHaveLength(1);
+    expect(w[0]?.code).toBe('LAW_NOT_CURRENTLY_ENFORCED');
+    expect(w[0]?.message).toContain('現行施行版ではない可能性');
+    expect(w[0]?.message).toContain('SomeNewStatus');
   });
 });
