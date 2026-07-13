@@ -27,7 +27,7 @@ function cleanValue(value: string | null | undefined): string | undefined {
 }
 
 /** law_revision_id から版固定 URL（/api/2/law_data/{id}）を導出。純粋。 */
-export function buildVersionPinnedUrl(lawRevisionId: string | undefined): string | undefined {
+export function buildVersionPinnedUrl(lawRevisionId: string | null | undefined): string | undefined {
   const id = cleanValue(lawRevisionId);
   return id ? `${EGOV_LAW_DATA_API}/${id}` : undefined;
 }
