@@ -10,7 +10,7 @@ import { NotFoundError, ValidationError } from '../errors.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
 import { indexMetadataRegistry } from '../indexes/index-metadata.js';
 import type { IndexSnapshotMeta } from '../indexes/types.js';
-import type { EgovLawSearchResult } from '../types.js';
+import type { EgovLawSearchResult, EgovRevisionInfo } from '../types.js';
 import { findDelegatedLawCandidates, getKnownLawCandidateById, type LawRegistryCandidate } from '../law-registry.js';
 import type { WarningMessage } from '../types.js';
 import { decideSearchRouting, type SearchRoute } from '../search-routing-policy.js';
@@ -24,6 +24,7 @@ export interface GetLawArticleResult {
   articleCaption: string;
   text: string;
   egovUrl: string;
+  revisionInfo?: EgovRevisionInfo;
 }
 
 export interface GetLawTocResult {
@@ -33,6 +34,7 @@ export interface GetLawTocResult {
   promulgationDate: string;
   toc: string;
   egovUrl: string;
+  revisionInfo?: EgovRevisionInfo;
 }
 
 export interface SearchLawResultItem {
@@ -132,6 +134,7 @@ export async function getLawArticle(params: {
     articleCaption: result.articleCaption ?? '',
     text: result.text,
     egovUrl,
+    revisionInfo: data.revision_info,
   };
   lawArticleNormalizedCache.set(cacheKey, payload);
   return payload;
@@ -163,6 +166,7 @@ export async function getLawToc(params: {
     promulgationDate: data.law_info.promulgation_date,
     toc,
     egovUrl,
+    revisionInfo: data.revision_info,
   };
   lawTocNormalizedCache.set(params.lawName, payload);
   return payload;

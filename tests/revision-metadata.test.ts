@@ -1,10 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   buildRevisionMetadata,
   buildVersionInfoString,
   getRevisionWarnings,
 } from '../src/lib/evidence-metadata.js';
 import type { EgovRevisionInfo } from '../src/lib/types.js';
+import { getLawArticle } from '../src/lib/services/law-service.js';
+import { lawDataRawCache } from '../src/lib/cache.js';
+
+const laborFixture = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./fixtures/egov/labor-standards-law.json', import.meta.url)), 'utf8'),
+);
 
 describe('buildRevisionMetadata', () => {
   it('revision_info から機械可読メタへ写像し version_pinned_url を導出', () => {
@@ -113,5 +121,26 @@ describe('getRevisionWarnings', () => {
     expect(w[0]?.code).toBe('LAW_NOT_CURRENTLY_ENFORCED');
     expect(w[0]?.message).toContain('現行施行版ではない可能性');
     expect(w[0]?.message).toContain('SomeNewStatus');
+  });
+});
+
+describe('law-service revisionInfo populate', () => {
+  beforeEach(() => {
+    lawDataRawCache.clear();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(laborFixture), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getLawArticle が data.revision_info を revisionInfo に載せる', async () => {
+    const result = await getLawArticle({ lawName: '322AC0000000049', article: '32' });
+    expect(result.revisionInfo?.amendment_enforcement_date).toBe('2026-06-24');
+    expect(result.revisionInfo?.current_revision_status).toBe('CurrentEnforced');
   });
 });
