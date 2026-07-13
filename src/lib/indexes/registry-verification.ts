@@ -79,3 +79,32 @@ export function isBumpGateSatisfied(report: VerificationReport, bumpDateIsoDay: 
   if (!report.allOk) return false;
   return report.verifiedAt.slice(0, 10) === bumpDateIsoDay;
 }
+
+/**
+ * Verify (name → lawId) registry entries against a title fetcher, sequentially
+ * (so the caller's rate limiting / single concurrency is respected). A rejected
+ * fetch is captured as NOT_FOUND/ERROR — one failing law never aborts the run.
+ */
+export async function verifyRegistry(
+  entries: ReadonlyArray<readonly [string, string]>,
+  fetchTitle: (lawId: string) => Promise<string>,
+  verifiedAt: string
+): Promise<VerificationReport> {
+  const results: LawVerificationResult[] = [];
+  for (const [expectedName, lawId] of entries) {
+    let outcome: FetchOutcome;
+    try {
+      outcome = { ok: true, title: await fetchTitle(lawId) };
+    } catch (error) {
+      outcome = { ok: false, errorMessage: error instanceof Error ? error.message : String(error) };
+    }
+    results.push({
+      lawId,
+      expectedName,
+      status: classifyResult(expectedName, outcome),
+      actualName: outcome.ok ? outcome.title : undefined,
+      error: outcome.ok ? undefined : outcome.errorMessage,
+    });
+  }
+  return summarizeReport(results, verifiedAt);
+}

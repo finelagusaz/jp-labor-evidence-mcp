@@ -5,6 +5,7 @@ import {
   classifyResult,
   summarizeReport,
   isBumpGateSatisfied,
+  verifyRegistry,
   type LawVerificationResult,
 } from '../src/lib/indexes/registry-verification.js';
 
@@ -73,5 +74,49 @@ describe('isBumpGateSatisfied', () => {
       '2026-07-13T09:00:00.000Z'
     );
     expect(isBumpGateSatisfied(bad, '2026-07-13')).toBe(false);
+  });
+});
+
+describe('verifyRegistry', () => {
+  const entries: Array<[string, string]> = [
+    ['労働基準法', '322AC0000000049'],
+    ['雇用保険法', '349AC0000000116'],
+  ];
+
+  it('全件一致で allOk=true・OK 件数=総数', async () => {
+    const titles: Record<string, string> = {
+      '322AC0000000049': '労働基準法',
+      '349AC0000000116': '雇用保険法',
+    };
+    const report = await verifyRegistry(entries, async (id) => titles[id], '2026-07-13T02:00:00.000Z');
+    expect(report.allOk).toBe(true);
+    expect(report.counts.OK).toBe(2);
+    expect(report.verifiedAt).toBe('2026-07-13T02:00:00.000Z');
+  });
+
+  it('404 reject は NOT_FOUND・他は継続する', async () => {
+    const report = await verifyRegistry(
+      entries,
+      async (id) => {
+        if (id === '349AC0000000116') throw new Error('HTTP 404 Not Found — url');
+        return '労働基準法';
+      },
+      '2026-07-13T02:00:00.000Z'
+    );
+    expect(report.counts.OK).toBe(1);
+    expect(report.counts.NOT_FOUND).toBe(1);
+    expect(report.allOk).toBe(false);
+    expect(report.results).toHaveLength(2); // 1件失敗しても全件分の結果が残る
+    expect(report.results.find((r) => r.lawId === '349AC0000000116')?.status).toBe('NOT_FOUND');
+  });
+
+  it('名称ズレは NAME_MISMATCH（actualName を残す）', async () => {
+    const report = await verifyRegistry(
+      [['労働基準法', '322AC0000000049']],
+      async () => '労働基準法施行令',
+      '2026-07-13T02:00:00.000Z'
+    );
+    expect(report.results[0]?.status).toBe('NAME_MISMATCH');
+    expect(report.results[0]?.actualName).toBe('労働基準法施行令');
   });
 });
