@@ -157,3 +157,43 @@ export function buildPendingAmendments(
   });
   return { amendments, excludedCount };
 }
+
+/**
+ * 未施行改正の警告を返す（法令名接頭・誤帰属 hedge・改正/廃止分割・fail-safe）。純粋。
+ * - amendments が1件以上 → UNENFORCED_AMENDMENT_PENDING（最も近い施行予定日は min で防御的）。
+ * - excludedCount > 0 → PENDING_AMENDMENT_INCOMPLETE_DATA。
+ */
+export function getPendingAmendmentWarnings(
+  built: { amendments: PendingAmendment[]; excludedCount: number },
+  lawTitle: string,
+): WarningMessage[] {
+  const warnings: WarningMessage[] = [];
+  const { amendments, excludedCount } = built;
+  if (amendments.length > 0) {
+    const repealCount = amendments.filter(
+      (a) => a.repeal_status !== undefined && a.repeal_status !== 'None',
+    ).length;
+    const amendCount = amendments.length - repealCount;
+    const nearest = amendments.reduce(
+      (min, a) => (a.enforcement_date < min ? a.enforcement_date : min),
+      amendments[0].enforcement_date,
+    );
+    const parts: string[] = [];
+    if (amendCount > 0) parts.push(`未施行の改正が ${amendCount} 件`);
+    if (repealCount > 0) parts.push(`廃止予定が ${repealCount} 件`);
+    warnings.push({
+      code: 'UNENFORCED_AMENDMENT_PENDING',
+      message:
+        `${lawTitle}: 現行施行版に対し、${parts.join('・')}予定されています（最も近い施行予定日 ${nearest}）。` +
+        '※これは法令全体の改正予定であり、引用した条文が改正対象に含まれるとは限りません。' +
+        '詳細は pending_amendments を参照してください。',
+    });
+  }
+  if (excludedCount > 0) {
+    warnings.push({
+      code: 'PENDING_AMENDMENT_INCOMPLETE_DATA',
+      message: `${lawTitle}: 一部の未施行改正で施行予定日が取得できませんでした（${excludedCount} 件）。`,
+    });
+  }
+  return warnings;
+}

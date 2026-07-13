@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildVersionPinnedUrl, buildPendingAmendments } from '../src/lib/evidence-metadata.js';
-import type { EgovRevisionInfo } from '../src/lib/types.js';
+import { buildVersionPinnedUrl, buildPendingAmendments, getPendingAmendmentWarnings } from '../src/lib/evidence-metadata.js';
+import type { EgovRevisionInfo, PendingAmendment } from '../src/lib/types.js';
 
 const rev = (o: Partial<EgovRevisionInfo>): EgovRevisionInfo => ({ ...o });
+const pa = (o: Partial<PendingAmendment> & { enforcement_date: string }): PendingAmendment => ({ ...o });
 
 describe('buildVersionPinnedUrl', () => {
   it('law_revision_id から /api/2/law_data/{id} を導出', () => {
@@ -57,5 +58,40 @@ describe('buildPendingAmendments', () => {
   it('undefined / UnEnforced なし → 空', () => {
     expect(buildPendingAmendments(undefined)).toEqual({ amendments: [], excludedCount: 0 });
     expect(buildPendingAmendments([rev({ current_revision_status: 'CurrentEnforced' })])).toEqual({ amendments: [], excludedCount: 0 });
+  });
+});
+
+describe('getPendingAmendmentWarnings', () => {
+  it('空 → 警告なし', () => {
+    expect(getPendingAmendmentWarnings({ amendments: [], excludedCount: 0 }, '労働基準法')).toEqual([]);
+  });
+
+  it('未施行あり → 件数・最も近い施行予定日（未ソートでも min）・法令名接頭・hedge', () => {
+    const w = getPendingAmendmentWarnings({
+      amendments: [pa({ enforcement_date: '2030-04-01' }), pa({ enforcement_date: '2027-04-01' })],
+      excludedCount: 0,
+    }, '労働安全衛生法');
+    expect(w[0].code).toBe('UNENFORCED_AMENDMENT_PENDING');
+    expect(w[0].message).toContain('労働安全衛生法: ');
+    expect(w[0].message).toContain('現行施行版に対し');
+    expect(w[0].message).toContain('未施行の改正が 2 件');
+    expect(w[0].message).toContain('最も近い施行予定日 2027-04-01'); // 未ソート入力でも min
+    expect(w[0].message).toContain('改正対象に含まれるとは限りません'); // hedge
+    expect(w[0].message).not.toContain('法律第'); // 改正法名を列挙しない
+  });
+
+  it('廃止予定を改正と分けて数える', () => {
+    const w = getPendingAmendmentWarnings({
+      amendments: [pa({ enforcement_date: '2027-04-01', repeal_status: 'Repeal' }), pa({ enforcement_date: '2028-04-01', repeal_status: 'None' })],
+      excludedCount: 0,
+    }, '某法');
+    expect(w[0].message).toContain('未施行の改正が 1 件');
+    expect(w[0].message).toContain('廃止予定が 1 件');
+  });
+
+  it('excludedCount>0 → PENDING_AMENDMENT_INCOMPLETE_DATA を追加', () => {
+    const w = getPendingAmendmentWarnings({ amendments: [pa({ enforcement_date: '2027-04-01' })], excludedCount: 2 }, '某法');
+    expect(w.map((x) => x.code)).toContain('PENDING_AMENDMENT_INCOMPLETE_DATA');
+    expect(w.find((x) => x.code === 'PENDING_AMENDMENT_INCOMPLETE_DATA')?.message).toContain('某法: ');
   });
 });
