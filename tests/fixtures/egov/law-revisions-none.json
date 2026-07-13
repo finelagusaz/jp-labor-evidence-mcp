@@ -1,0 +1,7 @@
+{
+  "law_info": { "law_type": "Act", "law_id": "322AC0000000049", "law_num": "昭和二十二年法律第四十九号", "promulgation_date": "1947-04-07" },
+  "revisions": [
+    { "law_revision_id": "322AC0000000049_20260624_508AC0000000046", "amendment_enforcement_date": "2026-06-24", "current_revision_status": "CurrentEnforced", "repeal_status": "None" },
+    { "law_revision_id": "322AC0000000049_20200401_500AC0000000000", "amendment_enforcement_date": "2020-04-01", "current_revision_status": "PreviousEnforced", "repeal_status": "None" }
+  ]
+}

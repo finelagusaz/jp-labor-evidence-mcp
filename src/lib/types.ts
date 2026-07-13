@@ -59,6 +59,23 @@ export interface EgovLawData {
   revision_info?: EgovRevisionInfo;
 }
 
+/** e-Gov /law_revisions（法令履歴一覧）レスポンス */
+export interface EgovLawRevisionsResponse {
+  law_info?: EgovLawData['law_info'];
+  revisions?: EgovRevisionInfo[];
+}
+
+/** get_article の pending_amendments 各件（施行日昇順） */
+export interface PendingAmendment {
+  enforcement_date: string;       // = amendment_enforcement_date（除外により出力では常在）
+  amendment_law_num?: string;
+  amendment_law_title?: string;
+  law_revision_id?: string;
+  version_pinned_url?: string;
+  enforcement_note?: string;      // = amendment_enforcement_comment
+  repeal_status?: string;
+}
+
 export interface EgovNode {
   tag: string;
   attr?: Record<string, string>;

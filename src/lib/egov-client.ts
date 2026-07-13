@@ -3,7 +3,7 @@
  * https://laws.e-gov.go.jp/api/2/swagger-ui
  */
 
-import type { EgovLawSearchResult, EgovLawData } from './types.js';
+import type { EgovLawSearchResult, EgovLawData, EgovLawRevisionsResponse } from './types.js';
 import { isEgovLawId, resolveLawNameStrict } from './law-registry.js';
 import { extractLawTitle } from './egov-parser.js';
 import { ValidationError } from './errors.js';
@@ -57,6 +57,17 @@ export async function searchLaws(
 
   const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 20);
   return await egovSourceAdapter.searchLaws(normalizedKeyword, safeLimit, lawType);
+}
+
+/**
+ * 確定済み law_id の法令履歴一覧（/law_revisions）を取得
+ */
+export async function fetchLawRevisions(lawId: string): Promise<EgovLawRevisionsResponse> {
+  const trimmed = lawId.trim();
+  if (!trimmed) {
+    throw new ValidationError('law_id を指定してください。');
+  }
+  return await egovSourceAdapter.fetchLawRevisions(trimmed);
 }
 
 /**
