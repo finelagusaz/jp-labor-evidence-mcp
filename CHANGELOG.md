@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-13
+
 ### Changed
 
 - （依存）major を一括更新: `zod` `^3.23.8` → `^4.4.3`（prod）、`typescript` `^5.7.0` → `^7.0.2`、`@types/node` `^20` → `^26.1.1`、`tsx` `^4.21.0` → `^4.23.0`（devDeps）。`vitest` は range 内で `4.1.10` へ。`@modelcontextprotocol/sdk` は `^1.26.0` のまま（既に range 内最新 `1.29.0` が入り `MCP_SDK_PINNED_VERSION` も追従済）
