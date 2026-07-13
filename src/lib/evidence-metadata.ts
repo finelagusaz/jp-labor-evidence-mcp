@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { EgovRevisionInfo, RevisionMetadata, WarningMessage } from './types.js';
+import type { EgovRevisionInfo, PendingAmendment, RevisionMetadata, WarningMessage } from './types.js';
 
 export function computeUpstreamHash(parts: string[]): string {
   const hash = createHash('sha256');
@@ -117,4 +117,43 @@ export function getRevisionWarnings(
     body = `この法令は現行施行版ではない可能性があります（状態: ${rawState}）。現行の法令を確認してください。`;
   }
   return [{ code: 'LAW_NOT_CURRENTLY_ENFORCED', message: `${lawTitle}: ${body}` }];
+}
+
+/**
+ * /law_revisions の revisions から未施行改正（UnEnforced）を抽出し、
+ * (enforcement_date, law_revision_id) 昇順の PendingAmendment[] を返す。
+ * enforcement_date を持たない版は除外し excludedCount で数える。純粋（入力を mutate しない）。
+ */
+export function buildPendingAmendments(
+  revisions: EgovRevisionInfo[] | undefined,
+): { amendments: PendingAmendment[]; excludedCount: number } {
+  if (!revisions) return { amendments: [], excludedCount: 0 };
+  let excludedCount = 0;
+  const amendments: PendingAmendment[] = [];
+  for (const rev of revisions) {
+    if (cleanValue(rev.current_revision_status) !== 'UnEnforced') continue;
+    const enforcementDate = cleanValue(rev.amendment_enforcement_date);
+    if (!enforcementDate) {
+      excludedCount += 1;
+      continue;
+    }
+    amendments.push({
+      enforcement_date: enforcementDate,
+      amendment_law_num: cleanValue(rev.amendment_law_num),
+      amendment_law_title: cleanValue(rev.amendment_law_title),
+      law_revision_id: cleanValue(rev.law_revision_id),
+      version_pinned_url: buildVersionPinnedUrl(rev.law_revision_id),
+      enforcement_note: cleanValue(rev.amendment_enforcement_comment),
+      repeal_status: cleanValue(rev.repeal_status),
+    });
+  }
+  amendments.sort((a, b) => {
+    if (a.enforcement_date !== b.enforcement_date) {
+      return a.enforcement_date < b.enforcement_date ? -1 : 1;
+    }
+    const ra = a.law_revision_id ?? '';
+    const rb = b.law_revision_id ?? '';
+    return ra < rb ? -1 : ra > rb ? 1 : 0;
+  });
+  return { amendments, excludedCount };
 }
