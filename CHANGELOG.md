@@ -19,6 +19,7 @@
 
 - `verify:egov`（`scripts/verify-egov-registry.ts`）: `LAW_ID_MAP` を live e-Gov API v2 と照合し `OK` / `NAME_MISMATCH` / `NOT_FOUND` / `ERROR` に分類する maintainer 用スクリプト（ネットワーク依存・CI/publish gate 対象外）。検証ロジックは `src/lib/indexes/registry-verification.ts` に分離し単体テスト対象
 - （tool）`get_article` / `get_evidence_bundle` に版メタを追加: 既取得の e-Gov `revision_info`（**追加リクエストなし**）から、現行版の施行日・改正法・版固定 URL 等を機械可読な `revision_metadata` として、また誤帰属を避ける hedge（「※この施行日は法令全体の現行版を指し、引用した条文が改正されたとは限りません」）付きで人間可読 `version_info` に提供。非現行版・廃止/失効法令には警告 `LAW_NOT_CURRENTLY_ENFORCED` を付与。未施行改正の検知は別エンドポイント（`/law_revisions`）を要するため v2 backlog
+- `get_article`: `include_pending_amendments`（既定 false）で e-Gov `/law_revisions` を追引きし、未施行の改正（施行予定日つき・段階施行の全ロードマップ）を `pending_amendments[]` として提供。誤帰属 hedge 付きの `UNENFORCED_AMENDMENT_PENDING` 警告を付与。取得失敗は graceful degrade（条文は返す・`status:'partial'`）
 
 ### Security
 
