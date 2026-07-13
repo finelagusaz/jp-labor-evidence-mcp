@@ -40,22 +40,22 @@ describe('getEvidenceBundle', () => {
       lawId: '322AC0000000049',
       lawTitle: '労働基準法',
       delegatedLaws: [{
-        lawId: '322CO0000000300',
-        lawTitle: '労働基準法施行令',
-        lawType: 'CabinetOrder',
-        sourceUrl: 'https://laws.e-gov.go.jp/law/322CO0000000300',
-        aliases: ['労基令'],
+        lawId: '322M40000100023',
+        lawTitle: '労働基準法施行規則',
+        lawType: 'MinisterialOrdinance',
+        sourceUrl: 'https://laws.e-gov.go.jp/law/322M40000100023',
+        aliases: ['労基則'],
       }],
       searchKeywords: ['労働時間'],
       warnings: [],
     });
     vi.mocked(getLawToc).mockResolvedValue({
-      lawId: '322CO0000000300',
-      lawTitle: '労働基準法施行令',
-      lawNum: '昭和二十二年政令第三百号',
+      lawId: '322M40000100023',
+      lawTitle: '労働基準法施行規則',
+      lawNum: '昭和二十二年厚生省令第二十三号',
       promulgationDate: '1947-08-30',
       toc: '第一章 総則',
-      egovUrl: 'https://laws.e-gov.go.jp/law/322CO0000000300',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322M40000100023',
     });
     vi.mocked(searchMhlwTsutatsu).mockResolvedValue({
       status: 'ok',
@@ -86,7 +86,7 @@ describe('getEvidenceBundle', () => {
 
     expect(result.status).toBe('ok');
     expect(result.primary_evidence.canonical_id).toBe('egov:322AC0000000049:article:32');
-    expect(result.delegated_evidence[0]?.canonical_id).toBe('egov:322CO0000000300:toc');
+    expect(result.delegated_evidence[0]?.canonical_id).toBe('egov:322M40000100023:toc');
     expect(result.related_tsutatsu[0]?.canonical_id).toBe('mhlw:00tb2035');
     expect(result.delegated_evidence).toHaveLength(1);
     expect(result.related_tsutatsu[0]?.matched_keywords).toContain('労働時間');
@@ -410,11 +410,11 @@ describe('getEvidenceBundle', () => {
       lawId: '322AC0000000049',
       lawTitle: '労働基準法',
       delegatedLaws: [{
-        lawId: '322CO0000000300',
-        lawTitle: '労働基準法施行令',
-        lawType: 'CabinetOrder',
-        sourceUrl: 'https://laws.e-gov.go.jp/law/322CO0000000300',
-        aliases: ['労基令'],
+        lawId: '322M40000100023',
+        lawTitle: '労働基準法施行規則',
+        lawType: 'MinisterialOrdinance',
+        sourceUrl: 'https://laws.e-gov.go.jp/law/322M40000100023',
+        aliases: ['労基則'],
       }],
       searchKeywords: ['労働時間'],
       warnings: [],
@@ -439,7 +439,7 @@ describe('getEvidenceBundle', () => {
     expect(result.delegated_evidence).toHaveLength(0);
     expect(result.partial_failures).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ source: 'egov', target: 'toc:322CO0000000300', reason: 'upstream_unavailable' }),
+        expect.objectContaining({ source: 'egov', target: 'toc:322M40000100023', reason: 'upstream_unavailable' }),
         expect.objectContaining({ source: 'mhlw', target: 'search:労働時間', reason: 'upstream_unavailable' }),
       ])
     );

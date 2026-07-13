@@ -32,11 +32,11 @@ describe('find_related_sources tool', () => {
       lawId: '322AC0000000049',
       lawTitle: '労働基準法',
       delegatedLaws: [{
-        lawId: '322CO0000000300',
-        lawTitle: '労働基準法施行令',
-        lawType: 'CabinetOrder',
-        sourceUrl: 'https://laws.e-gov.go.jp/law/322CO0000000300',
-        aliases: ['労基令'],
+        lawId: '322M40000100023',
+        lawTitle: '労働基準法施行規則',
+        lawType: 'MinisterialOrdinance',
+        sourceUrl: 'https://laws.e-gov.go.jp/law/322M40000100023',
+        aliases: ['労基則'],
       }],
       searchKeywords: ['労働時間'],
       warnings: [],
@@ -51,7 +51,7 @@ describe('find_related_sources tool', () => {
     const result = await handler({ law_id: '322AC0000000049', article: '32' });
 
     expect(result.structuredContent.status).toBe('ok');
-    expect(result.structuredContent.data?.delegated_laws[0]?.canonical_id).toBe('egov:322CO0000000300');
+    expect(result.structuredContent.data?.delegated_laws[0]?.canonical_id).toBe('egov:322M40000100023');
   });
 
   it('委任先未登録でも ok で検索キーワードを返す', async () => {
