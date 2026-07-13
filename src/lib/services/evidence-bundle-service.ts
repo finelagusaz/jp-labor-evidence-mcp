@@ -1,6 +1,6 @@
 import { buildEgovArticleCanonicalId, buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
-import { computeUpstreamHash, joinVersionInfo } from '../evidence-metadata.js';
-import type { PartialFailure, WarningMessage } from '../types.js';
+import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
+import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
 import { ExternalApiError, ParseError } from '../errors.js';
 import { findRelatedSources, getArticleByLawId, getLawToc } from './law-service.js';
 import { searchJaishTsutatsu } from './jaish-tsutatsu-service.js';
@@ -15,6 +15,7 @@ export interface EvidenceRecord {
   retrieved_at: string;
   warnings: WarningMessage[];
   version_info?: string;
+  revision_metadata?: RevisionMetadata;
   upstream_hash: string;
   article_locator?: {
     law_id: string;
@@ -74,7 +75,8 @@ export async function getEvidenceBundle(params: {
     source_url: primary.egovUrl,
     retrieved_at: retrievedAt,
     warnings: [],
-    version_info: joinVersionInfo([primary.lawNum, primary.promulgationDate]),
+    version_info: buildVersionInfoString(primary.lawNum, primary.promulgationDate, primary.revisionInfo),
+    revision_metadata: buildRevisionMetadata(primary.revisionInfo),
     upstream_hash: computeUpstreamHash([primary.lawId, primaryTitle, primaryBody, primary.egovUrl]),
     article_locator: {
       law_id: primary.lawId,
@@ -83,6 +85,8 @@ export async function getEvidenceBundle(params: {
       item: params.item,
     },
   };
+
+  const primaryRevisionWarnings = getRevisionWarnings(primary.revisionInfo, primary.lawTitle);
 
   const related = await findRelatedSources({
     lawId: primary.lawId,
@@ -94,7 +98,7 @@ export async function getEvidenceBundle(params: {
     ...extractKeywordCandidates(primaryBody),
   ];
   const keywords = normalizeKeywords(params.relatedKeywords, inferredKeywords);
-  const warnings: WarningMessage[] = [...related.warnings];
+  const warnings: WarningMessage[] = [...primaryRevisionWarnings, ...related.warnings];
   const partialFailures: PartialFailure[] = [];
   const delegatedEvidence: EvidenceRecord[] = [];
   const relatedTsutatsu: EvidenceRecord[] = [];
@@ -110,9 +114,11 @@ export async function getEvidenceBundle(params: {
         source_url: toc.egovUrl,
         retrieved_at: retrievedAt,
         warnings: [],
-        version_info: joinVersionInfo([toc.lawNum, toc.promulgationDate]),
+        version_info: buildVersionInfoString(toc.lawNum, toc.promulgationDate, toc.revisionInfo),
+        revision_metadata: buildRevisionMetadata(toc.revisionInfo),
         upstream_hash: computeUpstreamHash([delegatedLaw.lawId, delegatedLaw.lawTitle, toc.toc, toc.egovUrl]),
       });
+      warnings.push(...getRevisionWarnings(toc.revisionInfo, delegatedLaw.lawTitle));
     } catch (error) {
       const failure = mapRelatedSourceFailure('egov', `toc:${delegatedLaw.lawId}`, error);
       warnings.push(failure.warning);

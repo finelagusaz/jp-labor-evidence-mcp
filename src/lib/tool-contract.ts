@@ -23,6 +23,17 @@ export const partialFailureSchema = z.object({
   reason: z.string(),
 });
 
+export const revisionMetadataSchema = z.object({
+  law_revision_id: z.string().optional(),
+  current_enforcement_date: z.string().optional(),
+  enforcement_note: z.string().optional(),
+  amendment_law_num: z.string().optional(),
+  amendment_law_title: z.string().optional(),
+  current_revision_status: z.string().optional(),
+  repeal_status: z.string().optional(),
+  version_pinned_url: z.string().optional(),
+});
+
 export type ToolStatus = z.infer<typeof toolStatusSchema>;
 export type ToolErrorCode = z.infer<typeof errorCodeSchema>;
 export type ToolEnvelope<T> = {

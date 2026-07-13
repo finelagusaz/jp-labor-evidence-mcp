@@ -19,6 +19,31 @@ export interface EgovLawSearchResult {
   };
 }
 
+/** e-Gov law_data.revision_info の v1 で用いる部分集合（防御的に全 optional/nullable） */
+export interface EgovRevisionInfo {
+  law_revision_id?: string | null;
+  amendment_enforcement_date?: string | null;
+  amendment_enforcement_comment?: string | null;
+  amendment_law_num?: string | null;
+  amendment_law_title?: string | null;
+  amendment_law_id?: string | null;
+  current_revision_status?: string | null;
+  repeal_status?: string | null;
+  repeal_date?: string | null;
+}
+
+/** get_article / evidence-bundle の Evidence に載る機械可読 版メタ（すべて optional・null は含めない） */
+export interface RevisionMetadata {
+  law_revision_id?: string;
+  current_enforcement_date?: string;
+  enforcement_note?: string;
+  amendment_law_num?: string;
+  amendment_law_title?: string;
+  current_revision_status?: string;
+  repeal_status?: string;
+  version_pinned_url?: string;
+}
+
 export interface EgovLawData {
   law_info: {
     law_id: string;
@@ -31,6 +56,7 @@ export interface EgovLawData {
     promulgation_date: string;
   };
   law_full_text: EgovNode;
+  revision_info?: EgovRevisionInfo;
 }
 
 export interface EgovNode {

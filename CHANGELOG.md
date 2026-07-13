@@ -13,10 +13,12 @@
 - （サポート）最低サポート Node を `>=24` に引き上げ、EOL 済みの Node 18 / 20 と Maintenance LTS の 22 を対象外に。`package.json` に `engines.node: ">=24"` を新設し、CI matrix を `[20, 22, 24]` → `[24, 26]`（Active LTS + Current）、README バッジを `>=18` → `>=24` へ更新。`@types/node` 26 の型と実際にテスト・保証する実行環境を一致させるための整合（Node 20 は 2026-03-24 EOL）。**最低 Node の引き上げは実質 breaking** ゆえ、次リリースは minor 以上を推奨
 - （データ）bundled law index の `GENERATED_AT` を `2026-07-13` に更新。`verify:egov` で全法令の現存性・正式名称を live e-Gov と照合した裏付けの上で再スタンプ（メタデータの現在性を保証。条文改正の反映は非保証）。freshness 系テストの時刻基準を追従
 - （データ）内部 registry を live e-Gov と照合して是正: 船員保険法の `law_id` を `414AC0000000073`（誤・平成14）から `314AC0000000073`（正・昭和14）へ修正し、e-Gov に存在しない「労働基準法施行令」（`322CO0000000300`）を削除（同法の施行規則 `322M40000100023` は既に収録済み）。同梱法令数 41 → 40
+- （tool）freshness 警告 `BUNDLED_INDEX_AGED` の文言を是正: 条文本文は常に live 取得のため「本文の更新に再起動は不要」である旨を明記し、再起動が対象とするのは内蔵の法令リスト（法令名・略称→law_id の対応表）に限定。従来の「最新の法令改正を反映するには再起動」という過大約束を解消（version_info 導入と同じ category error の是正）
 
 ### Added
 
 - `verify:egov`（`scripts/verify-egov-registry.ts`）: `LAW_ID_MAP` を live e-Gov API v2 と照合し `OK` / `NAME_MISMATCH` / `NOT_FOUND` / `ERROR` に分類する maintainer 用スクリプト（ネットワーク依存・CI/publish gate 対象外）。検証ロジックは `src/lib/indexes/registry-verification.ts` に分離し単体テスト対象
+- （tool）`get_article` / `get_evidence_bundle` に版メタを追加: 既取得の e-Gov `revision_info`（**追加リクエストなし**）から、現行版の施行日・改正法・版固定 URL 等を機械可読な `revision_metadata` として、また誤帰属を避ける hedge（「※この施行日は法令全体の現行版を指し、引用した条文が改正されたとは限りません」）付きで人間可読 `version_info` に提供。非現行版・廃止/失効法令には警告 `LAW_NOT_CURRENTLY_ENFORCED` を付与。未施行改正の検知は別エンドポイント（`/law_revisions`）を要するため v2 backlog
 
 ### Security
 

@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getEvidenceBundle } from '../lib/services/evidence-bundle-service.js';
-import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope } from '../lib/tool-contract.js';
+import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope, revisionMetadataSchema } from '../lib/tool-contract.js';
 
 const inputSchema = z.object({
   law_id: z.string().min(1).max(20).describe(
@@ -36,6 +36,7 @@ const evidenceSchema = z.object({
     message: z.string(),
   })),
   version_info: z.string().optional(),
+  revision_metadata: revisionMetadataSchema.optional(),
   upstream_hash: z.string(),
   article_locator: z.object({
     law_id: z.string(),

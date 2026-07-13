@@ -1,10 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { buildEgovArticleCanonicalId } from '../lib/canonical-id.js';
-import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
+import { computeUpstreamHash, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../lib/evidence-metadata.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getArticleByLawId } from '../lib/services/law-service.js';
-import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
+import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope, revisionMetadataSchema } from '../lib/tool-contract.js';
 
 const getArticleInputSchema = z.object({
   law_id: z.string().min(1).max(20).describe(
@@ -35,6 +35,7 @@ const getArticleOutputSchema = createToolEnvelopeSchema(
     source_url: z.string(),
     retrieved_at: z.string(),
     version_info: z.string().optional(),
+    revision_metadata: revisionMetadataSchema.optional(),
     upstream_hash: z.string(),
   })
 );
@@ -63,14 +64,16 @@ export function registerGetArticleTool(server: McpServer) {
         const itemDisplay = args.item ? `第${args.item}号` : '';
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
         const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
-        const versionInfo = joinVersionInfo([result.lawNum, result.promulgationDate]);
+        const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo);
+        const revisionMetadata = buildRevisionMetadata(result.revisionInfo);
         const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
+        const revisionWarnings = getRevisionWarnings(result.revisionInfo, result.lawTitle);
 
         const envelope = {
           status: 'ok' as const,
           retryable: false,
           degraded: false,
-          warnings: freshnessWarnings,
+          warnings: [...freshnessWarnings, ...revisionWarnings],
           partial_failures: [],
           data: {
             source_type: 'egov' as const,
@@ -85,6 +88,7 @@ export function registerGetArticleTool(server: McpServer) {
             source_url: result.egovUrl,
             retrieved_at: isoNow(),
             version_info: versionInfo,
+            revision_metadata: revisionMetadata,
             upstream_hash: computeUpstreamHash([result.lawId, title, body, result.egovUrl]),
           },
         };

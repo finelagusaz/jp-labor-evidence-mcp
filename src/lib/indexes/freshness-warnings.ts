@@ -65,7 +65,7 @@ export function getBundledIndexWarnings(now: number = Date.now()): FreshnessWarn
   const boundaryNote = crossedBoundary
     ? `（直近の労働法令改正施行日 ${formatJstDate(boundaryMs)} を跨いでいるため、4/1 / 10/1 施行改正が反映されていない可能性があります）`
     : '';
-  const message = `内蔵法令インデックスの生成から ${ageDays} 日経過しています（生成日: ${formatJstDate(generatedMs)}）${boundaryNote}。最新の法令改正を反映するには、Claude Desktop / Claude Code を再起動してください（\`npx -y\` 起動の場合は再起動で最新パッケージが自動取得されます）。グローバルインストール利用時は \`npm update -g jp-labor-evidence-mcp\` を実行してください。`;
+  const message = `内蔵法令インデックスの生成から ${ageDays} 日経過しています（生成日: ${formatJstDate(generatedMs)}）${boundaryNote}。なお条文の本文は常に最新の現行版をオンライン取得するため、本文の更新に再起動は不要です。この警告が対象とするのは内蔵の法令リスト（法令名・略称から法令を特定するための対応表）で、新しく制定・改称された法令を検索できるようにするには Claude Desktop / Claude Code を再起動してください（\`npx -y\` 起動なら再起動で最新パッケージを自動取得。グローバルインストールは \`npm update -g jp-labor-evidence-mcp\`）。`;
   return [{ code: 'BUNDLED_INDEX_AGED', source: 'egov', message }];
 }
 
