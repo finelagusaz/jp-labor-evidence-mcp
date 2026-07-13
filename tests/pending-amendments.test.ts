@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildVersionPinnedUrl, buildPendingAmendments, getPendingAmendmentWarnings } from '../src/lib/evidence-metadata.js';
+import { fetchLawRevisions } from '../src/lib/egov-client.js';
+import { lawRevisionsRawCache } from '../src/lib/cache.js';
 import type { EgovRevisionInfo, PendingAmendment } from '../src/lib/types.js';
 
 const rev = (o: Partial<EgovRevisionInfo>): EgovRevisionInfo => ({ ...o });
@@ -93,5 +95,24 @@ describe('getPendingAmendmentWarnings', () => {
     const w = getPendingAmendmentWarnings({ amendments: [pa({ enforcement_date: '2027-04-01' })], excludedCount: 2 }, '某法');
     expect(w.map((x) => x.code)).toContain('PENDING_AMENDMENT_INCOMPLETE_DATA');
     expect(w.find((x) => x.code === 'PENDING_AMENDMENT_INCOMPLETE_DATA')?.message).toContain('某法: ');
+  });
+});
+
+describe('fetchLawRevisions (adapter+client)', () => {
+  beforeEach(() => {
+    lawRevisionsRawCache.clear();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ law_info: { law_id: '347AC0000000057' }, revisions: [{ law_revision_id: 'x', current_revision_status: 'UnEnforced', amendment_enforcement_date: '2027-04-01' }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } }),
+    ));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('取得しキャッシュする（2回目は fetch を呼ばない）', async () => {
+    const r1 = await fetchLawRevisions('347AC0000000057');
+    const r2 = await fetchLawRevisions('347AC0000000057');
+    expect(r1.revisions?.[0].current_revision_status).toBe('UnEnforced');
+    expect(r2.revisions?.[0].law_revision_id).toBe('x');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

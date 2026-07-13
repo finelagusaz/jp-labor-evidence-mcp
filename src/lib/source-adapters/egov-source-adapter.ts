@@ -1,5 +1,5 @@
-import { lawDataRawCache, lawSearchRawCache } from '../cache.js';
-import type { EgovLawData, EgovLawSearchResult } from '../types.js';
+import { lawDataRawCache, lawRevisionsRawCache, lawSearchRawCache } from '../cache.js';
+import type { EgovLawData, EgovLawRevisionsResponse, EgovLawSearchResult } from '../types.js';
 import { HttpSourceAdapter } from './http-source-adapter.js';
 
 const EGOV_API_BASE = 'https://laws.e-gov.go.jp/api/2';
@@ -36,6 +36,27 @@ class EgovSourceAdapter extends HttpSourceAdapter {
     const serialized = JSON.stringify(data);
     if (serialized.length <= MAX_CACHEABLE_JSON_CHARS) {
       lawDataRawCache.set(lawId, serialized);
+    }
+
+    return data;
+  }
+
+  async fetchLawRevisions(lawId: string): Promise<EgovLawRevisionsResponse> {
+    const cached = lawRevisionsRawCache.get(lawId);
+    if (cached) {
+      return JSON.parse(cached) as EgovLawRevisionsResponse;
+    }
+
+    const url = `${this.baseUrl}/law_revisions/${lawId}`;
+    const data = await this.fetchJson<EgovLawRevisionsResponse>(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    const serialized = JSON.stringify(data);
+    if (serialized.length <= MAX_CACHEABLE_JSON_CHARS) {
+      lawRevisionsRawCache.set(lawId, serialized);
     }
 
     return data;

@@ -155,6 +155,13 @@ export const lawDataRawCache = new RawResponseCache<string>('law_data', {
   maxBytes: 2_000_000,
 });
 
+/** raw: e-Gov 法令履歴一覧 JSON */
+export const lawRevisionsRawCache = new RawResponseCache<string>('law_revisions', {
+  defaultTtlMs: 60 * 60 * 1000,
+  maxEntries: 64,
+  maxBytes: 2_000_000,
+});
+
 /** raw: e-Gov 法令検索 JSON */
 export const lawSearchRawCache = new RawResponseCache<string>('law_search', {
   defaultTtlMs: 30 * 60 * 1000,
