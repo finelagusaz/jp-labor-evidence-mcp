@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { buildVersionPinnedUrl, buildPendingAmendments, getPendingAmendmentWarnings } from '../src/lib/evidence-metadata.js';
 import { fetchLawRevisions } from '../src/lib/egov-client.js';
+import { getPendingAmendments } from '../src/lib/services/law-service.js';
 import { lawRevisionsRawCache } from '../src/lib/cache.js';
 import type { EgovRevisionInfo, PendingAmendment } from '../src/lib/types.js';
+
+const aneiRevisions = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/egov/law-revisions-anei.json', import.meta.url)), 'utf8'));
 
 const rev = (o: Partial<EgovRevisionInfo>): EgovRevisionInfo => ({ ...o });
 const pa = (o: Partial<PendingAmendment> & { enforcement_date: string }): PendingAmendment => ({ ...o });
@@ -114,5 +119,23 @@ describe('fetchLawRevisions (adapter+client)', () => {
     expect(r1.revisions?.[0].current_revision_status).toBe('UnEnforced');
     expect(r2.revisions?.[0].law_revision_id).toBe('x');
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('law-service getPendingAmendments', () => {
+  beforeEach(() => {
+    lawRevisionsRawCache.clear();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(aneiRevisions), { status: 200, headers: { 'content-type': 'application/json' } }),
+    ));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('fixture から昇順 3 件＋excludedCount 1 を返す', async () => {
+    const built = await getPendingAmendments('347AC0000000057');
+    expect(built.amendments.map((a) => a.enforcement_date)).toEqual(['2027-04-01', '2027-04-01', '2030-04-01']);
+    expect(built.amendments[0].law_revision_id).toBe('347AC0000000057_20270401_507AC0000000033'); // tie: 507 < 508
+    expect(built.amendments[1].amendment_law_num).toBeUndefined(); // 508 版は null → undefined
+    expect(built.excludedCount).toBe(1);
   });
 });

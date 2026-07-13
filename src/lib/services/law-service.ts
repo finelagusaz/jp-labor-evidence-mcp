@@ -3,14 +3,15 @@
  * e-Gov法令API v2 を使った条文取得・検索のビジネスロジック
  */
 
-import { fetchLawData, searchLaws, getEgovUrl } from '../egov-client.js';
+import { fetchLawData, fetchLawRevisions, searchLaws, getEgovUrl } from '../egov-client.js';
+import { buildPendingAmendments } from '../evidence-metadata.js';
 import { NormalizedCache } from '../cache.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
 import { indexMetadataRegistry } from '../indexes/index-metadata.js';
 import type { IndexSnapshotMeta } from '../indexes/types.js';
-import type { EgovLawSearchResult, EgovRevisionInfo } from '../types.js';
+import type { EgovLawSearchResult, EgovRevisionInfo, PendingAmendment } from '../types.js';
 import { findDelegatedLawCandidates, getKnownLawCandidateById, type LawRegistryCandidate } from '../law-registry.js';
 import type { WarningMessage } from '../types.js';
 import { decideSearchRouting, type SearchRoute } from '../search-routing-policy.js';
@@ -425,3 +426,13 @@ function getPracticeKeywords(lawId: string, article?: string): string[] {
 const RELATED_SOURCE_KEYWORD_MAP: Record<string, string[]> = {
   '322AC0000000049:36': ['36協定', '時間外労働', '休日労働'],
 };
+
+/**
+ * 法令の未施行改正を取得
+ */
+export async function getPendingAmendments(
+  lawId: string,
+): Promise<{ amendments: PendingAmendment[]; excludedCount: number }> {
+  const { revisions } = await fetchLawRevisions(lawId);
+  return buildPendingAmendments(revisions);
+}
