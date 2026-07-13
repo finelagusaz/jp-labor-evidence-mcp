@@ -20,6 +20,8 @@
     "sync:indexes": "tsx scripts/sync-indexes.ts",
     "sync:indexes:full": "tsx scripts/sync-full-indexes.ts",
     "sync:indexes:incremental": "tsx scripts/sync-incremental-indexes.ts",
+    "verify:egov": "tsx scripts/verify-egov-registry.ts",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "pack:dry-run": "npm pack --dry-run --cache ./.npm-pack-cache",
     "release:check": "npm test && npm run build && npm run pack:dry-run",
     "test": "vitest run",

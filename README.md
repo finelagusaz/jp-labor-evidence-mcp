@@ -186,7 +186,7 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 
 ## 対応法令プリセット
 
-内部 registry には **41 法令** の `law_id` と略称を同梱しています。代表例:
+内部 registry には **40 法令** の `law_id` と略称を同梱しています。代表例:
 
 - 労働基準法（労基法）
 - 労働安全衛生法（安衛法）
@@ -196,7 +196,7 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 
 略称表記の例: `労基法` / `安衛法` / `パワハラ防止法` 等。
 
-全 41 法令の一覧と略称、委任関係は [docs/supported-laws.md](docs/supported-laws.md) をご覧ください。registry にない法令も、`resolve_law` は e-Gov 検索の厳密一致から候補補完することがあります（曖昧入力の自動採用はしません）。
+全 40 法令の一覧と略称、委任関係は [docs/supported-laws.md](docs/supported-laws.md) をご覧ください。registry にない法令も、`resolve_law` は e-Gov 検索の厳密一致から候補補完することがあります（曖昧入力の自動採用はしません）。
 
 ## 検索 contract
 

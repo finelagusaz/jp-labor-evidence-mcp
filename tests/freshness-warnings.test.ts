@@ -5,7 +5,7 @@ const DAY = 24 * 60 * 60 * 1000;
 // Keep in sync with GENERATED_AT in src/lib/indexes/egov-index.ts.
 // All time references below derive from this single base so a GENERATED_AT
 // bump only requires editing this one line.
-const GENERATED_AT_ISO = '2026-06-10T00:00:00.000Z';
+const GENERATED_AT_ISO = '2026-07-13T00:00:00.000Z';
 const GENERATED_AT_MS = Date.parse(GENERATED_AT_ISO);
 
 describe('freshness-warnings', () => {
@@ -362,7 +362,7 @@ describe('freshness-warnings', () => {
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
       const now = GENERATED_AT_MS + 61 * DAY;
       const message = getBundledIndexWarnings(now)[0]?.message ?? '';
-      expect(message).toContain('生成日: 2026-06-10 JST');
+      expect(message).toContain('生成日: 2026-07-13 JST');
     });
 
     it('boundary note の施行日は JST 表記（4/1・10/1 を UTC ズレなく表示）', async () => {

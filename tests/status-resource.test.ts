@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
 
-const GENERATED_AT_ISO = '2026-06-10T00:00:00.000Z';
+const GENERATED_AT_ISO = '2026-07-13T00:00:00.000Z';
 const GENERATED_AT_MS = Date.parse(GENERATED_AT_ISO);
 const DAY = 24 * 60 * 60 * 1000;
 

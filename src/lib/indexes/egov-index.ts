@@ -7,7 +7,7 @@ import type { SerializedLawIndex } from './serialization.js';
 import type { IndexSnapshotMeta, LawIndexEntry } from './types.js';
 import { computeBundledAgeDays } from './time.js';
 
-const GENERATED_AT = '2026-06-10T00:00:00.000Z';
+const GENERATED_AT = '2026-07-13T00:00:00.000Z';
 
 function inferLawType(lawTitle: string): string {
   if (lawTitle.endsWith('施行令')) {

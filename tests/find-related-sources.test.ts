@@ -37,7 +37,6 @@ describe('findRelatedSources', () => {
 
     expect(result.delegatedLaws.map((law) => law.lawTitle)).toEqual([
       '労働基準法施行規則',
-      '労働基準法施行令',
     ]);
     expect(result.searchKeywords).toContain('労働時間');
   });
