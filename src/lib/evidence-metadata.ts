@@ -54,3 +54,24 @@ export function buildRevisionMetadata(
   const hasAny = Object.values(metadata).some((value) => value !== undefined);
   return hasAny ? metadata : undefined;
 }
+
+/**
+ * 人間可読 version_info を組む。既存 base（法令番号 / 公布日）を変えず、
+ * 現行版の施行日セグメント＋誤帰属 hedge を append する。改正法名は載せない。
+ * revision または施行日が無ければ base のみへ graceful degrade。純粋関数。
+ */
+export function buildVersionInfoString(
+  lawNum: string | undefined,
+  promulgationDate: string | undefined,
+  revisionInfo?: EgovRevisionInfo,
+): string | undefined {
+  const base = joinVersionInfo([lawNum, promulgationDate]);
+  const enforcementDate = cleanValue(revisionInfo?.amendment_enforcement_date);
+  if (!enforcementDate) return base;
+  const note = cleanValue(revisionInfo?.amendment_enforcement_comment);
+  const noteSuffix = note ? `（施行期日規定: ${note}）` : '';
+  const segment =
+    `現行版の施行日 ${enforcementDate}${noteSuffix}　` +
+    '※この施行日は法令全体の現行版を指し、引用した条文が改正されたとは限りません';
+  return joinVersionInfo([base, segment]);
+}

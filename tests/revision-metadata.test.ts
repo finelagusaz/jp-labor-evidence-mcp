@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRevisionMetadata } from '../src/lib/evidence-metadata.js';
+import { buildRevisionMetadata, buildVersionInfoString } from '../src/lib/evidence-metadata.js';
 import type { EgovRevisionInfo } from '../src/lib/types.js';
 
 describe('buildRevisionMetadata', () => {
@@ -39,5 +39,46 @@ describe('buildRevisionMetadata', () => {
     expect(buildRevisionMetadata(undefined)).toBeUndefined();
     expect(buildRevisionMetadata({})).toBeUndefined();
     expect(buildRevisionMetadata({ amendment_law_num: null })).toBeUndefined();
+  });
+});
+
+describe('buildVersionInfoString', () => {
+  it('base（法令番号 / 公布日）に施行日セグメント＋hedge を append する', () => {
+    const s = buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
+      amendment_enforcement_date: '2026-06-24',
+      amendment_law_title: '民法等の一部を改正する法律…整備法',
+    });
+    expect(s).toContain('昭和二十二年法律第四十九号');
+    expect(s).toContain('1947-04-07');
+    expect(s).toContain('現行版の施行日 2026-06-24');
+    expect(s).toContain('引用した条文が改正されたとは限りません');
+  });
+
+  it('改正法名は文字列に載せない（誤帰属回避）', () => {
+    const s = buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
+      amendment_enforcement_date: '2026-06-24',
+      amendment_law_title: '民法等の一部を改正する法律…整備法',
+      amendment_law_num: '令和八年法律第四十六号',
+    });
+    expect(s).not.toContain('整備法');
+    expect(s).not.toContain('令和八年法律第四十六号');
+  });
+
+  it('revision または施行日が無ければ base のみへ degrade（JST を付けない）', () => {
+    expect(buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', undefined))
+      .toBe('昭和二十二年法律第四十九号 / 1947-04-07');
+    expect(buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', { repeal_status: 'None' }))
+      .toBe('昭和二十二年法律第四十九号 / 1947-04-07');
+    expect(buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
+      amendment_enforcement_date: '2026-06-24',
+    })).not.toContain('JST');
+  });
+
+  it('施行期日規定（enforcement_note）があれば併記し裸の断定を避ける', () => {
+    const s = buildVersionInfoString('某法律', '2000-01-01', {
+      amendment_enforcement_date: '2026-06-24',
+      amendment_enforcement_comment: '公布の日から起算して一年を超えない範囲内において政令で定める日',
+    });
+    expect(s).toContain('施行期日規定: 公布の日から起算して');
   });
 });
