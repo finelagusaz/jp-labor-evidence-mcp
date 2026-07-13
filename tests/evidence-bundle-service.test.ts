@@ -444,4 +444,24 @@ describe('getEvidenceBundle', () => {
       ])
     );
   });
+
+  it('primary_evidence に revision_metadata と強化 version_info を載せ、非現行なら top-level 警告', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '000AC0000000000', lawTitle: '旧・某法',
+      lawNum: '某法律', promulgationDate: '1950-01-01',
+      article: '1', articleCaption: '', text: '...',
+      egovUrl: 'https://laws.e-gov.go.jp/law/000AC0000000000',
+      revisionInfo: { repeal_status: 'Repeal', repeal_date: '2020-04-01' },
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '000AC0000000000', lawTitle: '旧・某法',
+      delegatedLaws: [], searchKeywords: [], warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({ results: [], warnings: [], partialFailures: [] } as any);
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({ results: [], warnings: [], failedPages: [] } as any);
+
+    const bundle = await getEvidenceBundle({ lawId: '000AC0000000000', article: '1', includeJaish: false });
+    expect(bundle.primary_evidence.revision_metadata?.repeal_status).toBe('Repeal');
+    expect(bundle.warnings.some((w) => w.code === 'LAW_NOT_CURRENTLY_ENFORCED' && w.message.includes('旧・某法'))).toBe(true);
+  });
 });
