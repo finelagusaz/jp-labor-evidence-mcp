@@ -42,6 +42,10 @@ describe('freshness-warnings', () => {
       expect(warnings[0]?.message).toContain('61 日');
       expect(warnings[0]?.message).toContain('再起動');
       expect(warnings[0]?.message).toContain('npm update -g jp-labor-evidence-mcp');
+      // companion fix: 本文 live ゆえ過大約束しない・内部用語を平易化
+      expect(warnings[0]?.message).toContain('本文の更新に再起動は不要');
+      expect(warnings[0]?.message).toContain('内蔵の法令リスト');
+      expect(warnings[0]?.message).not.toContain('最新の法令改正を反映するには');
     });
   });
 
