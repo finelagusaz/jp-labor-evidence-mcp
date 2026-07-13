@@ -63,7 +63,9 @@ egov API law_data.revision_info（既に raw JSON で取得済み・lawDataRawCa
 ```
 
 - **adapter 変更不要**: [egov-source-adapter.ts](../../../src/lib/source-adapters/egov-source-adapter.ts) は `fetchJson<EgovLawData>` / `JSON.parse(cached)` を丸ごと返すだけでフィールド写像をしていない。型に `revision_info?` を足すだけで通る。
-- **キャッシュ整合**: revision は per-law。既に版依存メタ（`lawNum`/`promulgationDate`）を同じ payload に載せており、同一 law・同一時点で同一 revision に収束、TTL（law_article 15分）が同一境界で staleness を縛る。**cache key 変更は不要**。
+- **キャッシュ整合と鮮度**: revision_info は `lawNum`/`promulgationDate` と**同一の raw law_data 取得**由来ゆえ、両者は完全に同一ライフサイクル（revision 追加で新たな不整合は生じない）。ただし staleness の実境界は `law_article` の 15分ではなく、その手前の **`lawDataRawCache`（[cache.ts:152-153](../../../src/lib/cache.ts#L152-L153) の 1時間 TTL）**。`law_article`（15分）が切れても `fetchLawDataById`（[egov-source-adapter.ts:24-27](../../../src/lib/source-adapters/egov-source-adapter.ts#L24-L27)）が raw キャッシュを最大1時間再利用するため、本文・revision_info とも**最大1時間**まで stale になり得る。
+  - **これは鮮度要件上許容**（設計原則: 鮮度は偶発的なキャッシュ数値でなく**データの volatility** で規定する）。revision メタ（どの版が現行か）は施行日境界（月単位で疎）でしか変化せず、1時間以内に変わることはない。∴ ≤1h の staleness は監査上無視できる。**raw キャッシュの TTL 変更・無効化は行わない**——全 law_data consumer に波及し、rate-limit（minIntervalMs 200 / maxConcurrency 1 / circuit breaker）下の upstream 負荷を無用に増やす over-engineering。施行日 00:00 JST 直後の最大1時間だけ旧版を返し得る端点は、自己修復的（≤1h）で許容する。
+  - **cache key 変更は不要**。
 - **`EgovLawData.revision_info` の型**: v1 で使うフィールドのみモデル化（他は将来拡張）。すべて `?: string | null` として防御的にパース。
 
 ```ts
@@ -139,11 +141,13 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 | `repeal_status=Suspend` | この法令は効力が停止されています。適用の可否を確認してください。 |
 | `current_revision_status=UnEnforced` | この版はまだ施行されていません（未施行）。現在の施行版とは内容が異なる可能性があります。 |
 | `current_revision_status=PreviousEnforced` | この版は過去の施行版であり、現行版ではありません。より新しい施行版が存在します。 |
+| 上記以外の非現行値（未知 enum を含む・fail-safe） | この法令は現行施行版ではない可能性があります（状態: {raw値}）。現行の法令を確認してください。 |
 
-- **enum の raw 英語値は warning 文言に出さない**。和訳マップをコード定数として持つ（構造化メタ側は raw を保持）:
+- **enum の raw 英語値は warning 文言に出さない**（既知値のみ和訳）。和訳マップをコード定数として持つ（構造化メタ側は raw を保持）:
   - `current_revision_status`: CurrentEnforced→現行施行版 / UnEnforced→未施行 / PreviousEnforced→過去施行版 / Repeal→廃止
   - `repeal_status`: None→該当なし / Repeal→廃止 / Expire→失効 / Suspend→効力停止 / LossOfEffectiveness→効力喪失
-- **bundle での可視性（m5）**: warning message に**法令名を含める**（top-level に集約されても「どの法令か」が消えないように）。
+  - **未知値（和訳マップに無い非現行値）**: 上表 fail-safe 行の汎用文言を用い、識別のため raw 値のみ括弧内に併記（例「状態: SomeNewStatus」）。トリガが発火して文言が無い経路を作らない＝**入力領域に対し全域**。
+- **bundle での可視性（m5）＋対象法令の明示**: warning message は helper が受け取る `lawTitle` を**接頭**して構築（例「労働基準法: この法令は廃止されています…」）。top-level に集約されても対象法令を識別できる。
 - 時刻非依存: v1 の唯一の警告は文字列一致のみで日付比較を含まない。`now` 注入は不要。
 
 ## 6. 実装ユニット
@@ -160,8 +164,10 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
   - トップレベル ` / ` 連結は既存 `joinVersionInfo` を再利用。
   - 施行日セグメントは施行日が取れる時のみ付与＋ hedge。改正法名は載せない（誤帰属対策）。
   - 入れ子の空値も個別ガード（`（による改正）` 空括弧混入を防ぐ／v1 は改正法名を文字列に出さないため実質回避されるが、helper 契約として明記）。
-- `getRevisionWarnings(revisionInfo?): WarningMessage[]`
-  - §5.3 の複合トリガ＋和訳マップ。`revisionInfo` 欠落時は空配列。`now` を取らない（純粋）。
+- `getRevisionWarnings(revisionInfo, lawTitle): WarningMessage[]`
+  - **入力領域に対し全域**：§5.3 の複合トリガに合致する各状態を定義済み文言へ写像し、既知 enum に該当しない非現行値（未知値含む）は fail-safe の汎用文言（raw 値を括弧内に併記）を返す——トリガが発火して文言が無い経路を作らない。
+  - message は `lawTitle` を**接頭**して対象法令を明示（bundle top-level 集約での識別性・m5）。`lawTitle` を引数に持つことが要件（§5.3）を満たす前提。
+  - `revisionInfo` 欠落時・現行版（無警告）時は空配列。`now` を取らない（純粋）。
 
 ### 6.2 `law-service.ts`
 
@@ -171,14 +177,14 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 
 - `data.revision_metadata = buildRevisionMetadata(result.revisionInfo)`
 - `version_info = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo)`
-- `envelope.warnings = [...freshnessWarnings, ...getRevisionWarnings(result.revisionInfo)]`
+- `envelope.warnings = [...freshnessWarnings, ...getRevisionWarnings(result.revisionInfo, result.lawTitle)]`
 - outputSchema に `revision_metadata`（optional object）を追加。`createToolEnvelopeSchema` は非 strict ＆ additive ゆえ後方互換。
 
 ### 6.4 `get_evidence_bundle`（primary ＋ 委任先 toc）
 
 - `EvidenceRecord`（[evidence-bundle-service.ts:9-31](../../../src/lib/services/evidence-bundle-service.ts#L9-L31)）と `evidenceSchema` に `revision_metadata?` を追加。
 - primary evidence（[77](../../../src/lib/services/evidence-bundle-service.ts#L77)）と委任先 toc evidence（[113](../../../src/lib/services/evidence-bundle-service.ts#L113)）で同 helper を通し version_info／revision_metadata を統一。
-- **警告経路**: revision warning はサービス側 top-level `warnings` 配列（[:97](../../../src/lib/services/evidence-bundle-service.ts#L97)）へ push → 既存 `dedupeWarnings` → [get-evidence-bundle.ts:100/111](../../../src/tools/get-evidence-bundle.ts#L100) の mergedWarnings → envelope.warnings + data.warnings + text section。per-record `warnings`（primary は `[]` 固定）だけに載せると human-readable text も dedupe も top-level しか読まず**不可視**になるため主経路は top-level。
+- **警告経路**: revision warning はサービス側 top-level `warnings` 配列（[:97](../../../src/lib/services/evidence-bundle-service.ts#L97)）へ push → 既存 `dedupeWarnings` → [get-evidence-bundle.ts:100/111](../../../src/tools/get-evidence-bundle.ts#L100) の mergedWarnings → envelope.warnings + data.warnings + text section。per-record `warnings`（primary は `[]` 固定）だけに載せると human-readable text も dedupe も top-level しか読まず**不可視**になるため主経路は top-level。`getRevisionWarnings` へは primary は `primary.lawTitle`、委任先 toc は `delegatedLaw.lawTitle` を渡し、集約後も対象法令を識別可能にする。
 
 ### 6.5 意図的な非対象（M4 を「見落とし」でなく「宣言」に）
 
@@ -200,7 +206,7 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 
 ## 8. テスト戦略（TDD）
 
-- **pure helper 単体**（evidence-metadata）: `buildRevisionMetadata`（null/空正規化・version_pinned_url 導出・全欠落→undefined）／`buildVersionInfoString`（hedge・施行日欠落 degrade・改正法名を出さないこと）／`getRevisionWarnings`（複合トリガの各状態・None は無警告・欠落は空）。
+- **pure helper 単体**（evidence-metadata）: `buildRevisionMetadata`（null/空正規化・version_pinned_url 導出・全欠落→undefined）／`buildVersionInfoString`（hedge・施行日欠落 degrade・改正法名を出さないこと）／`getRevisionWarnings`（複合トリガの各状態・**未知 enum 値→fallback 文言が出ること**（全域性の回帰防止）・`lawTitle` 接頭・None は無警告・欠落は空）。
 - **law-service**: `revision_info` 入り fixture から `GetLawArticleResult.revisionInfo` が populate されること。
 - **get_article real-server 統合テスト（新設・C1 の盲点封じ）**: `callTool`（[tests/test-helpers/mcp-internals.ts](../../../tests/test-helpers/mcp-internals.ts) の `callTool`）で実サーバ経由呼び出しし、(a) `revision_info` あり fixture で `revision_metadata` と強化 version_info を検証、(b) `amendment_enforcement_date: null` を含む fixture で **outputSchema validation が通る**こと（null→undefined 正規化の回帰防止）、(c) `repeal_status: Repeal` fixture で `LAW_NOT_CURRENTLY_ENFORCED` 発火。※ 現状 get_article/get_evidence_bundle/diff_revision は real-server 経由テストが皆無のため、この盲点を塞ぐ。
 - **evidence-bundle 結合**: primary_evidence の `revision_metadata`＋top-level warning。
@@ -213,7 +219,9 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 - 現行 v0.5.0 は据え置き・`[Unreleased]` に deps bump（Node>=24 系）が滞留中。本機能は次 minor に相乗り出荷（単独 patch を切らない方針を踏襲。version bump は実装完了時に別途判断）。
 - **CHANGELOG**: 実装 PR で `[Unreleased]`（または bump 時の実日付付き節）に追記。
 
-## 10. レビュー台帳（5視点サブエージェント）
+## 10. レビュー台帳（5視点サブエージェント ＋ Codex review）
+
+**設計原則（Codex 3指摘の根治で明文化）**: 契約は偶発的な実装値でなく**データの実性質**で規定し、関数は**入力領域に対して全域**に、かつ**出力を成すのに必要な入力を全て受け取る**完全シグネチャで定義する。
 
 | 出所 | 深刻度 | 指摘 | 処理 |
 |---|---|---|---|
@@ -230,6 +238,9 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 | ドメイン | Minor | 施行日への `" JST"` 付与は誤り／「解決マップ」は内部語 | ISO 固定・JST 付けない（§5.2）／companion fix 平易化（§6.6） |
 | ドメイン | Minor(不採用) | `remain_in_force === false` もトリガに | **不採用**（現行法でも false＝正常。§3/§5.3） |
 | 一次証拠 | 情報 | search 系にも revision_info あり | v1 は純スコープ選択として対象外（§2） |
+| Codex | P2 | staleness 境界は `law_article` 15分でなく `lawDataRawCache` 1時間（実コード裏取り済み） | §4 の誤った不変条件を撤回。鮮度をデータ volatility で規定し直し（≤1h は許容・cache 変更せず） |
+| Codex | P2 | fail-safe トリガは未知 enum を発火させるのに状態別文言が既知値のみ＝無出力経路 | 汎用 fallback 文言＋fail-safe 行を追加、helper を入力領域に対し全域化（§5.3/§6.1） |
+| Codex | P2 | `getRevisionWarnings(revisionInfo?)` は §5.3 の「法令名を含める」要件を満たせない | シグネチャに `lawTitle` を追加、message を接頭。呼び出し側で lawTitle を渡す（§5.3/§6.1/§6.3/§6.4） |
 
 ## 11. 未解決事項
 
