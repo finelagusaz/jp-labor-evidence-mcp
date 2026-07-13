@@ -14,6 +14,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - `npm run build` — tsc → `dist/`
 - `npm run release:check` — test + build + pack:dry-run、npm publish 前の必須 gate
 - `npm run sync:indexes[:full|:incremental]` — 内部 index の更新 script（**ネットワーク取得なし**。registry の bundled/seed を gitignored runtime store へ再シリアライズするだけ）
+- `npm run verify:egov` — `LAW_ID_MAP` を live e-Gov と照合（**ネットワーク依存・CI/publish gate 対象外・maintainer 用**）。全件 OK なら exit 0。`GENERATED_AT` bump 前の裏付けに使う
 - CI: `.github/workflows/ci.yml`（PR/push で Node 20/22/24 の test+build+pack）+ `release.yml`（自動 publish。下記 Release workflow 参照）
 
 ## Architecture
@@ -44,7 +45,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 - **永続 disk state**: `.jp-labor-evidence-indexes/` (gitignored) が `npm test` 失敗の原因に。`ENTRY_COUNT_DROP_TOO_LARGE` 系 promotion error が出たら `rm -rf .jp-labor-evidence-indexes` で復旧
 - **egov GENERATED_AT**: [src/lib/indexes/egov-index.ts:9](src/lib/indexes/egov-index.ts#L9) の literal。bundled 法令データの生成時刻、コード更新時に手動で書き換える
-  - **bump 時は freshness 結合テストも同じ日付へ追従必須**: [tests/freshness-warnings.test.ts](tests/freshness-warnings.test.ts) の `GENERATED_AT_ISO`、[tests/tool-freshness-warnings.test.ts](tests/tool-freshness-warnings.test.ts) の `GENERATED_AT_MS`、[tests/egov-index.test.ts](tests/egov-index.test.ts) の `setSystemTime`。怠ると `BUNDLED_INDEX_AGED` の発火位置がズレて test が赤化する
+  - **bump 時は freshness 結合テストも同じ日付へ追従必須**: [tests/freshness-warnings.test.ts](tests/freshness-warnings.test.ts) の `GENERATED_AT_ISO`、[tests/tool-freshness-warnings.test.ts](tests/tool-freshness-warnings.test.ts) の `GENERATED_AT_MS`、[tests/egov-index.test.ts](tests/egov-index.test.ts) の `setSystemTime`、[tests/status-resource.test.ts](tests/status-resource.test.ts) の `GENERATED_AT_ISO`。怠ると `BUNDLED_INDEX_AGED` の発火位置がズレて test が赤化する
   - `tests/tool-wire-contract.test.ts` / `tests/find-related-sources-tool.test.ts` は `vi.setSystemTime(new Date(getEgovIndexMeta().generated_at))` で egov を常に fresh 固定（#14 で実時刻 time-bomb を解消）。生成時刻を production と同一ソースから導出するため GENERATED_AT bump 追従は不要
 - **CHANGELOG date**: 自動 publish 化により placeholder 運用は**廃止**。`## [x.y.z] - YYYY-MM-DD` は **version bump PR の時点で実日付を記入**する（merge = release のため）
 - **Version bump**: package.json + `src/server.ts` の `version: '...'` を更新し、`npm install` で `package-lock.json` の version も同期（計 3 ファイル）
