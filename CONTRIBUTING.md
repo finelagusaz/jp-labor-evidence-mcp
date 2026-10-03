@@ -37,16 +37,19 @@ npm run release:check
 - `npm run build`
 - `npm pack --dry-run --cache ./.npm-pack-cache`
 
-公開時は npm 側で package 名の空き確認、`npm login`、必要なら 2FA / access token の準備が別途必要です。
+このチェックは CI（`.github/workflows/ci.yml`、Node 24/26）と `prepublishOnly` の両方で実行されます。
 
 ## リリース運用
 
-1. PR review pass → `main` にマージ
-2. [CHANGELOG.md](./CHANGELOG.md) の `## [x.y.z] - YYYY-MM-DD` の placeholder を実日付に置換
-3. version bump は **2 箇所** 同時に: `package.json` と `src/server.ts` の `version: '...'`
-4. `npm run release:check` で最終検証
-5. `npm publish`（`prepublishOnly` で `release:check` が再実行されます）
-6. GitHub tag / Release も合わせて作成
+リリースは GitHub Actions（`.github/workflows/release.yml`）が npm Trusted Publishing（OIDC）で自動 publish します。npm token や 2FA は不要で、provenance 署名が付きます。
+
+1. version bump PR を作成: `package.json` と `src/server.ts` の `SERVER_VERSION` を更新し、`npm install` で `package-lock.json` を同期
+2. 同じ PR で [CHANGELOG.md](./CHANGELOG.md) に `## [x.y.z] - YYYY-MM-DD` を**実日付**で追記（merge = release のため placeholder は使わない）
+3. CI（test + build + pack）が通ったら `main` にマージ
+4. `release.yml` が未公開 version を検知して `npm publish --provenance`、`vX.Y.Z` タグ、GitHub Release を自動作成（公開済み version ならスキップ）
+5. `npm view jp-labor-evidence-mcp version` で公開を確認
+
+手動 publish は fallback のみです。その場合は `npm publish` 時に 2FA 認証が必要です。
 
 変更履歴は [Keep a Changelog](https://keepachangelog.com/) 形式で [CHANGELOG.md](./CHANGELOG.md) に記録します。
 
