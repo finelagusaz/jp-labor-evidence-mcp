@@ -230,49 +230,28 @@ describe('freshness-warnings', () => {
   });
 
   describe('emitStartupWarnings', () => {
-    it('aged なら sendLoggingMessage と console.error を呼ぶ', async () => {
+    it('aged なら console.error (stderr) に警告を出す', async () => {
       const { emitStartupWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      const sendLoggingMessage = vi.fn().mockResolvedValue(undefined);
       const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const now = GENERATED_AT_MS + 61 * DAY;
 
-      await emitStartupWarnings({ sendLoggingMessage } as any, now);
+      emitStartupWarnings(now);
 
-      expect(sendLoggingMessage).toHaveBeenCalledTimes(1);
-      expect(sendLoggingMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          level: 'warning',
-          logger: 'jp-labor-evidence-mcp',
-          data: expect.stringContaining('内蔵法令インデックス'),
-        })
-      );
+      expect(stderrSpy).toHaveBeenCalledTimes(1);
       expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('[jp-labor-evidence-mcp] WARNING'));
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('内蔵法令インデックス'));
 
       stderrSpy.mockRestore();
     });
 
     it('aged でないなら何もしない', async () => {
       const { emitStartupWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      const sendLoggingMessage = vi.fn();
       const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const now = GENERATED_AT_MS + 10 * DAY;
 
-      await emitStartupWarnings({ sendLoggingMessage } as any, now);
+      emitStartupWarnings(now);
 
-      expect(sendLoggingMessage).not.toHaveBeenCalled();
       expect(stderrSpy).not.toHaveBeenCalled();
-
-      stderrSpy.mockRestore();
-    });
-
-    it('sendLoggingMessage が reject しても throw しない', async () => {
-      const { emitStartupWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      const sendLoggingMessage = vi.fn().mockRejectedValue(new Error('transport closed'));
-      const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const now = GENERATED_AT_MS + 61 * DAY;
-
-      await expect(emitStartupWarnings({ sendLoggingMessage } as any, now)).resolves.toBeUndefined();
-      expect(stderrSpy).toHaveBeenCalled();
 
       stderrSpy.mockRestore();
     });
@@ -332,13 +311,11 @@ describe('freshness-warnings', () => {
     it('抑止時は emitStartupWarnings が aged でも何もしない', async () => {
       vi.stubEnv('LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS', '1');
       const { emitStartupWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      const sendLoggingMessage = vi.fn();
       const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const agedNow = GENERATED_AT_MS + 61 * DAY;
 
-      await emitStartupWarnings({ sendLoggingMessage } as any, agedNow);
+      emitStartupWarnings(agedNow);
 
-      expect(sendLoggingMessage).not.toHaveBeenCalled();
       expect(stderrSpy).not.toHaveBeenCalled();
       stderrSpy.mockRestore();
     });

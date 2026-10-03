@@ -6,9 +6,17 @@
 
 ### Changed
 
+- **MCP 2026-07-28 に対応**。SDK を v1 `@modelcontextprotocol/sdk` から v2 `@modelcontextprotocol/server` `^2.3.0` へ移行し、stdio の起動を `serveStdio` に切り替えた。接続の最初のメッセージで世代を判定し、2026-07-28（`server/discover`、stateless、`resultType`・`ttlMs`/`cacheScope` 付き応答、結果 `_meta` の `serverInfo`）と従来の 2025 系（`initialize`）の両方に応答する。ツール・リソース・プロンプトの外形と `instructions` は両世代で同一
+  - プロンプト登録を廃止 API `server.prompt()` から `registerPrompt`（`argsSchema: z.object(...)`）へ
+  - `overrides` を全撤去: v2 server パッケージは HTTP 系依存（hono / express 等）を持たず、pin 対象が依存ツリーから消えた
 - （依存）`@modelcontextprotocol/sdk` を `^1.26.0`（実体 `1.29.0`）→ `^1.32.0` へ更新。テストが依存する private field（`server.server._requestHandlers` / `_instructions`）が 1.32.0 でも同名で存在することを確認し、`MCP_SDK_PINNED_VERSION` を `1.32.0` へ追従。src のコード変更なし
   - `overrides` は据え置き: SDK 1.32.0 の宣言 range（`hono ^4.11.4`、`@hono/node-server ^1.19.9 || ^2.0.5`、`express-rate-limit ^8.2.1`）は依然 override の下限を下回るため撤去条件を満たさない
-- （依存）`npm audit` の 10 件（high 4 / moderate 5 / low 1）を解消。新たに公表された advisory が既存 `overrides` の下限を上回ったため、下限を patched 版へ引き上げ: `hono` `^4.13.12`、`@hono/node-server` `^1.19.17`、`fast-uri` `^3.1.8`、`qs` `^6.16.0`、`ip-address` `^10.7.3`、`express-rate-limit` `^8.5.2`。`body-parser` `^2.3.0` を override に追加。devDeps の `vitest` を `^4.1.11` へ（`@vitest/mocker` の path traversal 対応）
+- （依存）`npm audit` の 10 件（high 4 / moderate 5 / low 1）を解消。新たに公表された advisory が既存 `overrides` の下限を上回ったため、下限を patched 版へ引き上げ: `hono` `^4.13.12`、`@hono/node-server` `^1.19.17`、`fast-uri` `^3.1.8`、`qs` `^6.16.0`、`ip-address` `^10.7.3`、`express-rate-limit` `^8.5.2`。`body-parser` `^2.3.0` を override に追加（その後 v2 SDK 移行で `overrides` は全撤去）。devDeps の `vitest` を `^4.1.11` へ（`@vitest/mocker` の path traversal 対応）
+
+### Removed
+
+- 定期 observability レポーター（`startObservabilityReporter`）を削除。`logging` capability 未宣言のため `sendLoggingMessage` は SDK 内で no-op となり、一度も送信されていなかった。同じ情報は `get_observability_snapshot` ツールで取得できる
+- 起動時の鮮度警告の MCP logging 送信を削除（同じく no-op だった）。stderr 出力と tool 応答の `warnings[]` は従来どおり
 
 ## [0.6.0] - 2026-07-13
 

@@ -1,4 +1,3 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getEgovIndexMeta } from './egov-index.js';
 import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
 import type { IndexSource } from './types.js';
@@ -134,23 +133,14 @@ export function toWireWarnings(warnings: FreshnessWarning[]): WarningMessage[] {
   return warnings.map(({ code, message }) => ({ code, message }));
 }
 
-export async function emitStartupWarnings(
-  server: McpServer,
-  now: number = Date.now()
-): Promise<void> {
+/**
+ * 起動時に bundled index の鮮度警告を stderr へ出す。
+ * MCP の logging notification は 2026-07-28 で非推奨（SEP-2577）かつ request 外では送れないため、
+ * spec 推奨の stderr のみを使う。tool 応答では `warnings[]` が引き続き同じ警告を運ぶ。
+ */
+export function emitStartupWarnings(now: number = Date.now()): void {
   if (isFreshnessWarningsSuppressed()) return;
-  const warnings = getBundledIndexWarnings(now);
-  if (warnings.length === 0) return;
-  for (const warning of warnings) {
+  for (const warning of getBundledIndexWarnings(now)) {
     console.error(`[jp-labor-evidence-mcp] WARNING: ${warning.message}`);
-    try {
-      await server.sendLoggingMessage({
-        level: 'warning',
-        data: warning.message,
-        logger: 'jp-labor-evidence-mcp',
-      });
-    } catch {
-      // MCP client may not support logging capability; stderr already written
-    }
   }
 }

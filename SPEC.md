@@ -1291,6 +1291,7 @@ bundled source (`egov`) の age が一定を超えた場合に、利用者へ再
 
 1. 閾値 60日（日本労働法の 4/1・10/1 施行サイクルに配慮）を `BUNDLED_AGE_THRESHOLD_DAYS` として定数化する
 2. 起動時に MCP logging notification (`level: warning`) と stderr に一次通知する
+   - 注（MCP 2026-07-28 対応時）: `logging` capability 未宣言のため MCP logging は SDK 内で no-op だった。Logging は 2026-07-28 で非推奨（SEP-2577）のため撤去し、stderr のみとした
 3. egov を消費する全 tool の response `warnings[]` に `BUNDLED_INDEX_AGED` を毎回 merge する
 4. server の `instructions` に LLM が warnings を surface するためのガイダンスを含める
 
@@ -1303,7 +1304,7 @@ bundled source (`egov`) の age が一定を超えた場合に、利用者へ再
 テスト観点:
 
 - bundled age 59/60/61日の境界挙動
-- emit の両チャネル（MCP logging / stderr）それぞれの発火
+- emit の両チャネル（MCP logging / stderr）それぞれの発火（2026-07-28 対応以降は stderr のみ）
 - tool response への merge 網羅
 - instructions に warning code が明記されていること
 

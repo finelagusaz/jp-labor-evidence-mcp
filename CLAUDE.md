@@ -4,6 +4,7 @@
 
 MCP server providing primary-source Japanese labor law evidence (法令、行政通達、判例) to LLMs.
 - npm: `jp-labor-evidence-mcp`（version は package.json 参照）、stdio transport
+- MCP SDK v2（`@modelcontextprotocol/server`）。`serveStdio` で 2026-07-28（`server/discover`）と 2025 系（`initialize`）の両世代を同一 factory で配信
 - Target clients: Claude Desktop / Claude Code via `npx -y jp-labor-evidence-mcp`
 - Target users: 社労士 / HR / legal advisers (日本語が一次)
 
@@ -19,7 +20,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 ## Architecture
 
-- `src/index.ts` — bootstrap (stdio transport + observability reporter + emitStartupWarnings)
+- `src/index.ts` — bootstrap（`initializeIndexes` → `serveStdio(() => createServer())` → `emitStartupWarnings`）。`createServer` は接続ごとに呼ばれうるので、プロセス単位の初期化は factory の外に置く
 - `src/server.ts` — `McpServer` factory、`instructions` field に LLM 向けガイダンス
 - `src/tools/*.ts` — 12 個の MCP tool（うち `get_law` は deprecated）。各 handler は envelope 構築時に warnings を merge
 - `src/lib/indexes/` — egov / mhlw / jaish 内部索引（bundled vs runtime）
@@ -39,7 +40,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - 時刻依存: `vi.useFakeTimers()` + `vi.setSystemTime(new Date(...))` + `afterEach(() => vi.useRealTimers())`
 - module-load-time の挙動を test: `vi.resetModules()` + 動的 `import()`（参考: [tests/egov-index.test.ts](tests/egov-index.test.ts)）
 - **file-level `vi.mock` は `vi.resetModules()` で消えない**: 同一ファイル内で一部の test だけ実装を使いたい場合、`resetModules()` 後の動的 `import()` にも mock が効き続ける。`vi.doUnmock(path)` → `vi.resetModules()` → 動的 `import()` の順で解除する。`vi.unmock` はホイストされてファイル全体の mock を無効化するので使わない（参考: [tests/get-article-revision.test.ts](tests/get-article-revision.test.ts)）
-- Tool integration test: SDK private field アクセス（`server.server._requestHandlers.get('tools/call')`、`_instructions`）は [tests/test-helpers/mcp-internals.ts](tests/test-helpers/mcp-internals.ts) に集約済み（#7）。tool 呼び出しは `callTool(server, name, args)`、instructions は `getServerInstructions(server)` を使う。SDK を bump すると [tests/mcp-internals.test.ts](tests/mcp-internals.test.ts) の version-guard が赤化するので、private field を再検証して `MCP_SDK_PINNED_VERSION` を更新する
+- Tool integration test: [tests/test-helpers/mcp-internals.ts](tests/test-helpers/mcp-internals.ts) が公開 API（`Client` + `InMemoryTransport`）で server に接続する。tool 呼び出しは `callTool(server, name, args)`、instructions は `await getServerInstructions(server)`。`InMemoryTransport` は 2025 系の wire のみなので、2026-07-28 経路は `node dist/index.js` へ `server/discover`（`_meta` に `io.modelcontextprotocol/protocolVersion` 必須。無いと 2025 系扱いで `-32601`）を流して確認する。SDK を bump すると [tests/mcp-internals.test.ts](tests/mcp-internals.test.ts) の version-guard が赤化するので、挙動を再確認して `MCP_SDK_PINNED_VERSION` を更新する
 - Registry seed test: `indexMetadataRegistry.register({...})` で fake meta を直接投入
 
 ## Gotchas
@@ -50,7 +51,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
   - `tests/tool-wire-contract.test.ts` / `tests/find-related-sources-tool.test.ts` / `tests/get-article-revision.test.ts` は `vi.setSystemTime(new Date(getEgovIndexMeta().generated_at))` で egov を常に fresh 固定（#14 で実時刻 time-bomb を解消）。生成時刻を production と同一ソースから導出するため GENERATED_AT bump 追従は不要
 - **CHANGELOG date**: 自動 publish 化により placeholder 運用は**廃止**。`## [x.y.z] - YYYY-MM-DD` は **version bump PR の時点で実日付を記入**する（merge = release のため）
 - **Version bump**: package.json + `src/server.ts` の `SERVER_VERSION` 定数を更新し、`npm install` で `package-lock.json` の version も同期（計 3 ファイル）
-- **deps overrides**: `package.json` の `overrides` は `@modelcontextprotocol/sdk` 由来 transitive 脆弱性の暫定 pin（hono / path-to-regexp / qs / ip-address / fast-uri / @hono/node-server / express-rate-limit / body-parser）。stdio 専用ゆえ実害は休眠だが audit ノイズ除去のため。**SDK がこれらを patched 版へ bump したら撤去・再評価**する
+- **MCP logging は使わない**: 2026-07-28 で Logging は非推奨（SEP-2577）で、request 外の `notifications/message` は送れない。運用ログは stderr（`console.error`）へ。`logging` capability も宣言しない
 - **Issue tracker**: `bugs.url` は `finelagusaz/jp-labor-evidence-mcp/issues`。upstream `kentaroajisaka/labor-law-mcp` には issue を立てない
 
 ## Release workflow

@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { buildEgovArticleCanonicalId, buildEgovTocCanonicalId } from '../lib/canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';

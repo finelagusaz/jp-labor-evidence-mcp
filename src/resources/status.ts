@@ -1,12 +1,12 @@
 /**
  * MCP リソース: サーバー状態 / freshness
  *
- * freshness 警告は logging notification と tool envelope の 2 経路に依存する
+ * freshness 警告は起動時 stderr と tool envelope の 2 経路に依存する
  * reactive な設計。本リソースは「今この server の index 状態を教えて」と
  * on-demand で照会できる proactive な経路を提供し、discoverability と
  * テスタビリティを高める。
  */
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { getEgovIndexMeta } from '../lib/indexes/egov-index.js';
 import { indexMetadataRegistry } from '../lib/indexes/index-metadata.js';
 import { computeBundledAgeDays } from '../lib/indexes/time.js';
