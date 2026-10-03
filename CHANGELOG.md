@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- （依存）`@modelcontextprotocol/sdk` を `^1.26.0`（実体 `1.29.0`）→ `^1.32.0` へ更新。テストが依存する private field（`server.server._requestHandlers` / `_instructions`）が 1.32.0 でも同名で存在することを確認し、`MCP_SDK_PINNED_VERSION` を `1.32.0` へ追従。src のコード変更なし
+  - `overrides` は据え置き: SDK 1.32.0 の宣言 range（`hono ^4.11.4`、`@hono/node-server ^1.19.9 || ^2.0.5`、`express-rate-limit ^8.2.1`）は依然 override の下限を下回るため撤去条件を満たさない
+
 ## [0.6.0] - 2026-07-13
 
 ### Changed
