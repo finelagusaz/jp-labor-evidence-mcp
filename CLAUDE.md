@@ -49,7 +49,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
   - `tests/tool-wire-contract.test.ts` / `tests/find-related-sources-tool.test.ts` は `vi.setSystemTime(new Date(getEgovIndexMeta().generated_at))` で egov を常に fresh 固定（#14 で実時刻 time-bomb を解消）。生成時刻を production と同一ソースから導出するため GENERATED_AT bump 追従は不要
 - **CHANGELOG date**: 自動 publish 化により placeholder 運用は**廃止**。`## [x.y.z] - YYYY-MM-DD` は **version bump PR の時点で実日付を記入**する（merge = release のため）
 - **Version bump**: package.json + `src/server.ts` の `version: '...'` を更新し、`npm install` で `package-lock.json` の version も同期（計 3 ファイル）
-- **deps overrides**: `package.json` の `overrides` は `@modelcontextprotocol/sdk` 由来 transitive 脆弱性の暫定 pin（hono / path-to-regexp / qs / ip-address / fast-uri / @hono/node-server / express-rate-limit）。stdio 専用ゆえ実害は休眠だが audit ノイズ除去のため。**SDK がこれらを patched 版へ bump したら撤去・再評価**する
+- **deps overrides**: `package.json` の `overrides` は `@modelcontextprotocol/sdk` 由来 transitive 脆弱性の暫定 pin（hono / path-to-regexp / qs / ip-address / fast-uri / @hono/node-server / express-rate-limit / body-parser）。stdio 専用ゆえ実害は休眠だが audit ノイズ除去のため。**SDK がこれらを patched 版へ bump したら撤去・再評価**する
 - **Issue tracker**: `bugs.url` は `finelagusaz/jp-labor-evidence-mcp/issues`。upstream `kentaroajisaka/labor-law-mcp` には issue を立てない
 
 ## Release workflow

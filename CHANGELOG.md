@@ -8,6 +8,7 @@
 
 - （依存）`@modelcontextprotocol/sdk` を `^1.26.0`（実体 `1.29.0`）→ `^1.32.0` へ更新。テストが依存する private field（`server.server._requestHandlers` / `_instructions`）が 1.32.0 でも同名で存在することを確認し、`MCP_SDK_PINNED_VERSION` を `1.32.0` へ追従。src のコード変更なし
   - `overrides` は据え置き: SDK 1.32.0 の宣言 range（`hono ^4.11.4`、`@hono/node-server ^1.19.9 || ^2.0.5`、`express-rate-limit ^8.2.1`）は依然 override の下限を下回るため撤去条件を満たさない
+- （依存）`npm audit` の 10 件（high 4 / moderate 5 / low 1）を解消。新たに公表された advisory が既存 `overrides` の下限を上回ったため、下限を patched 版へ引き上げ: `hono` `^4.13.12`、`@hono/node-server` `^1.19.17`、`fast-uri` `^3.1.8`、`qs` `^6.16.0`、`ip-address` `^10.7.3`、`express-rate-limit` `^8.5.2`。`body-parser` `^2.3.0` を override に追加。devDeps の `vitest` を `^4.1.11` へ（`@vitest/mocker` の path traversal 対応）
 
 ## [0.6.0] - 2026-07-13
 
