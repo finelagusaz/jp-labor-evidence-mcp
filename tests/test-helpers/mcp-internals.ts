@@ -6,7 +6,7 @@
  * tests reach into SDK-private fields. Centralising that access HERE keeps the
  * SDK-version coupling in one place — see Issue #7.
  *
- * Validated against @modelcontextprotocol/sdk 1.29.0. When the installed SDK
+ * Validated against @modelcontextprotocol/sdk 1.32.0. When the installed SDK
  * version changes, `tests/mcp-internals.test.ts` goes red: re-verify the field
  * names below (`server.server._requestHandlers`, `_instructions` /
  * `_options.instructions`) still hold, then bump `MCP_SDK_PINNED_VERSION`.
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 /** SDK version whose internals the shims below were validated against. */
-export const MCP_SDK_PINNED_VERSION = '1.29.0';
+export const MCP_SDK_PINNED_VERSION = '1.32.0';
 
 /** Reads the actually-installed @modelcontextprotocol/sdk version from disk. */
 export function getInstalledMcpSdkVersion(): string {
