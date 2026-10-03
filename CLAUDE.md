@@ -15,7 +15,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - `npm run release:check` — test + build + pack:dry-run、npm publish 前の必須 gate
 - `npm run sync:indexes[:full|:incremental]` — 内部 index の更新 script（**ネットワーク取得なし**。registry の bundled/seed を gitignored runtime store へ再シリアライズするだけ）
 - `npm run verify:egov` — `LAW_ID_MAP` を live e-Gov と照合（**ネットワーク依存・CI/publish gate 対象外・maintainer 用**）。全件 OK なら exit 0。`GENERATED_AT` bump 前の裏付けに使う
-- CI: `.github/workflows/ci.yml`（PR/push で Node 20/22/24 の test+build+pack）+ `release.yml`（自動 publish。下記 Release workflow 参照）
+- CI: `.github/workflows/ci.yml`（PR/push で Node 24/26 の test+build+pack）+ `release.yml`（自動 publish。下記 Release workflow 参照）
 
 ## Architecture
 
@@ -58,7 +58,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 1. version bump（package.json + `src/server.ts`）+ `npm install` で `package-lock.json` 同期
 2. CHANGELOG に `## [x.y.z] - YYYY-MM-DD` を**実日付**で追記
-3. PR 作成 → `ci.yml`（Node 20/22/24 で test+build+pack）が gate
+3. PR 作成 → `ci.yml`（Node 24/26 で test+build+pack）が gate
 4. main にマージ → `release.yml` が `package.json` 変更で発火。未公開 version のみ `npm publish --provenance` + `vX.Y.Z` タグ + GitHub release を自動生成
 5. `npm view jp-labor-evidence-mcp version dist-tags` と `dist.attestations`（provenance）で確認
 
