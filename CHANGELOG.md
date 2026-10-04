@@ -6,6 +6,10 @@
 
 ## [0.7.1] - 2026-10-04
 
+### Fixed
+
+- 省令の law_id（`322M40000100023` 労働基準法施行規則・`347M50002000032` 労働安全衛生規則・`350M50002000003` 雇用保険法施行規則）を、law_id を受け取る tool（`get_article` / `get_evidence_bundle` / `find_related_sources`、deprecated の `get_law`）が `validation` エラーで拒否していた。law_id 形式判定 `isEgovLawId` が法令種別コードを英字 2 文字に限定していたため、`resolve_law` が返した law_id をそのまま渡すと条文を取得できなかった。判定を `/^\d{3}[A-Z][A-Z0-9]{11}$/` に改め、未登録の `321CONSTITUTION` 等の形式も受け付ける（upstream `kentaroajisaka/labor-law-mcp` da2e35c と同じ修正）
+
 ### Changed
 
 - （データ）bundled law index の `GENERATED_AT` を `2026-10-04` に更新。`verify:egov` で全 40 法令の現存性・正式名称を live e-Gov と照合した裏付けの上で再スタンプ（メタデータの現在性を保証。条文改正の反映は非保証）。0.7.0 では生成から 60 日を超え、e-Gov 系 tool の応答に `BUNDLED_INDEX_AGED` が付いていた
