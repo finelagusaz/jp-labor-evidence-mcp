@@ -20,7 +20,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 ## Architecture
 
-- `src/index.ts` — bootstrap（`initializeIndexes` → `serveStdio(() => createServer())` → `emitStartupWarnings`）。`createServer` は接続ごとに呼ばれうるので、プロセス単位の初期化は factory の外に置く
+- `src/index.ts` — bootstrap（`initializeIndexes` → `serveStdio(() => createServer())` → `emitStartupWarnings`）。`createServer` は接続ごとに呼ばれうるので、プロセス単位の初期化は factory の外に置く。serveStdio は factory を遅延呼び出しするため、起動時に一度 `createServer()` して登録エラーを fail-fast させている
 - `src/server.ts` — `McpServer` factory、`instructions` field に LLM 向けガイダンス
 - `src/tools/*.ts` — 12 個の MCP tool（うち `get_law` は deprecated）。各 handler は envelope 構築時に warnings を merge
 - `src/lib/indexes/` — egov / mhlw / jaish 内部索引（bundled vs runtime）
@@ -40,7 +40,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 - 時刻依存: `vi.useFakeTimers()` + `vi.setSystemTime(new Date(...))` + `afterEach(() => vi.useRealTimers())`
 - module-load-time の挙動を test: `vi.resetModules()` + 動的 `import()`（参考: [tests/egov-index.test.ts](tests/egov-index.test.ts)）
 - **file-level `vi.mock` は `vi.resetModules()` で消えない**: 同一ファイル内で一部の test だけ実装を使いたい場合、`resetModules()` 後の動的 `import()` にも mock が効き続ける。`vi.doUnmock(path)` → `vi.resetModules()` → 動的 `import()` の順で解除する。`vi.unmock` はホイストされてファイル全体の mock を無効化するので使わない（参考: [tests/get-article-revision.test.ts](tests/get-article-revision.test.ts)）
-- Tool integration test: [tests/test-helpers/mcp-internals.ts](tests/test-helpers/mcp-internals.ts) が公開 API（`Client` + `InMemoryTransport`）で server に接続する。tool 呼び出しは `callTool(server, name, args)`、instructions は `await getServerInstructions(server)`。`InMemoryTransport` は 2025 系の wire のみなので、2026-07-28 経路は `node dist/index.js` へ `server/discover`（`_meta` に `io.modelcontextprotocol/protocolVersion` 必須。無いと 2025 系扱いで `-32601`）を流して確認する。SDK を bump すると [tests/mcp-internals.test.ts](tests/mcp-internals.test.ts) の version-guard が赤化するので、挙動を再確認して `MCP_SDK_PINNED_VERSION` を更新する
+- Tool integration test: [tests/test-helpers/mcp-internals.ts](tests/test-helpers/mcp-internals.ts) が公開 API（`Client` + `InMemoryTransport`）で server に接続する。tool 呼び出しは `callTool(server, name, args)`、instructions は `await getServerInstructions(server)`。`server.connect(InMemoryTransport)` は 2025 系の wire のみ。2026-07-28 経路は [tests/modern-protocol.test.ts](tests/modern-protocol.test.ts) が `serveStdio(factory, { transport })` に `InMemoryTransport` を渡して生 JSON-RPC で検証する（要求の `_meta` に `io.modelcontextprotocol/protocolVersion` 必須。無いと 2025 系扱いで `-32601`）。SDK を bump すると [tests/mcp-internals.test.ts](tests/mcp-internals.test.ts) の version-guard（server / client / core の 3 つ）が赤化するので、挙動を再確認して `MCP_SDK_PINNED_VERSION` を更新する。server と client は core を exact pin するので常に同じ版へそろえる
 - Registry seed test: `indexMetadataRegistry.register({...})` で fake meta を直接投入
 
 ## Gotchas

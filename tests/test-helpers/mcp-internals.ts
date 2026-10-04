@@ -8,12 +8,13 @@
  * in-memory `Client`, and calls flow over the real `tools/call` /
  * `initialize` wire exchange (including server-side outputSchema validation).
  *
- * Caveat: `InMemoryTransport` speaks the 2025-era protocol only. The
- * 2026-07-28 path (`serveStdio` → `server/discover`) is not covered here —
- * smoke it by piping a `server/discover` request into `node dist/index.js`.
+ * `server.connect(InMemoryTransport)` speaks the 2025-era protocol only. The
+ * 2026-07-28 path goes through `serveStdio`, which accepts an
+ * `InMemoryTransport` via its `transport` option — see
+ * `tests/modern-protocol.test.ts`.
  *
- * `tests/mcp-internals.test.ts` pins the installed SDK version so a bump
- * forces a deliberate re-check of the behaviours above.
+ * `tests/mcp-internals.test.ts` pins the installed server / client / core
+ * versions so a bump forces a deliberate re-check of the behaviours above.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -23,10 +24,12 @@ import type { McpServer } from '@modelcontextprotocol/server';
 /** SDK version the harness below was validated against. */
 export const MCP_SDK_PINNED_VERSION = '2.3.0';
 
-/** Reads the actually-installed @modelcontextprotocol/server version from disk. */
-export function getInstalledMcpSdkVersion(): string {
+/** Reads the actually-installed version of an @modelcontextprotocol/* package from disk. */
+export function getInstalledMcpSdkVersion(
+  pkgName: 'server' | 'client' | 'core' = 'server',
+): string {
   const pkgUrl = new URL(
-    '../../node_modules/@modelcontextprotocol/server/package.json',
+    `../../node_modules/@modelcontextprotocol/${pkgName}/package.json`,
     import.meta.url,
   );
   const pkg = JSON.parse(readFileSync(fileURLToPath(pkgUrl), 'utf8')) as { version: string };
@@ -46,6 +49,8 @@ function connectClient(server: McpServer): Promise<Client> {
       return c;
     })();
     clients.set(server, client);
+    // Don't cache a failed connect: later calls would re-throw the stale error.
+    client.catch(() => clients.delete(server));
   }
   return client;
 }
