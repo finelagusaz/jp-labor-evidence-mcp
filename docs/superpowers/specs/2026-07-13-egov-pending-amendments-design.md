@@ -245,4 +245,22 @@ wire contract の additive 追加（input optional bool・output optional array�
 - ~~件数上限~~ → **解決**: unbounded 維持（最大15件と小・schema `.max()` は footgun ゆえ付けない。pathological 時のみ実装側 slice＋注記）。
 - ~~`version_pinned_url` の v1 共通化~~ → **解決**: `buildVersionPinnedUrl` 抽出（§6.1）。
 - **残**: `include_pending_amendments` を将来 `get_evidence_bundle` にも広げる際の一貫性（本 spec は get_article 限定・意図的 follow-up）。
-- **残（v1 follow-up・別チケット）**: CurrentEnforced 版を持たない法令（社労士法等）での v1 `LAW_NOT_CURRENTLY_ENFORCED` 挙動の確認。egov 層の型付きエラー化（degrade reason 精度＋v1 retryable 判定の改善）。
+- ~~**残（v1 follow-up）**: CurrentEnforced 版を持たない法令での v1 `LAW_NOT_CURRENTLY_ENFORCED` 挙動の確認~~ → **解決（0.7.2・§11）**: 偽陽性を確認し、`/law_revisions` との施行日照合で解消。
+- **残（別チケット）**: egov 層の型付きエラー化（degrade reason 精度＋v1 retryable 判定の改善）。
+
+## 11. 追補: PreviousEnforced タグ付け遅れの偽陽性（2026-10-04）
+
+### 一次証拠（live、登録 40 法令）
+- 労組法・厚年法は、版指定なし `/law_data` が返す版自体が `PreviousEnforced`。`/law_revisions` にも CurrentEnforced 版が無く、返る版は施行済みの中で施行日が最新。`get_article` / `get_evidence_bundle` が「より新しい施行版が存在します」と**事実でない警告**を出していた。該当法令は時期で揺れる（7/13 は 4 法令、10/4 は 2 法令）
+- 施行日が過ぎた `UnEnforced`・施行日が未来の施行済み版・施行日の無い施行済み版は**いずれも 0 件**。未施行→施行の切り替えは施行日の 00:01 頃に行われており、**施行日は信頼できるがタグは信頼できない**
+- 同じ施行日の版が積み重なる法令が 3 つある（派遣法・健保法・国年法、いずれも 2026-10-01）。同日内の順序は施行日だけでは決まらない
+
+### 決定
+| 論点 | 決定 | 理由 |
+|---|---|---|
+| 「施行済みの最新版」の定義 | `isLatestEnforcedRevision`: target の施行日 ≦ 今日（JST）で、target 以外の施行済み版がすべて target より**前**の施行日を持ち、CurrentEnforced でないこと | 実データで正確さを確認できた施行日だけで判定する。本文の附則から施行日を読む案は、施行期日政令への委任や段階施行があるため不採用 |
+| 曖昧なとき（同日の別版・施行日欠落・target が一覧に無い） | false＝警告を残す | 誤って警告を消すより、偽陽性が残る方が安全。同日の場合に `/law_data` の選択を信じる案（③）は、根拠が今回の観察だけなので見送り |
+| 照合の発動条件 | `PreviousEnforced` のときだけ `/law_revisions` を引く（`verifyLatestEnforced`） | 追加の request は該当法令に限る。raw cache を v2 と共有する |
+| 照合の失敗 | false＝警告を残す。`degraded` / `partial_failures` にしない | もともと慎重側の警告を確かめる処理であり、利用者が求めた機能（`include_pending_amendments`）の失敗とは違う |
+| 出力 | `revision_metadata.current_revision_status` は生の値のまま。照合で最新と確認できたときだけ `latest_enforced_verified: true` を添える | 出典の値を加工しない。生の `PreviousEnforced` だけを見た LLM が誤読しないよう、照合結果を別フィールドで示す |
+| 廃止系・UnEnforced の警告 | option の影響を受けない | タグ付け遅れが観察されたのは `PreviousEnforced` だけ |

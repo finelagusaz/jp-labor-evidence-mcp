@@ -2,7 +2,7 @@ import { buildEgovArticleCanonicalId, buildMhlwDocumentCanonicalId, buildJaishCa
 import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
 import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
 import { ExternalApiError, ParseError } from '../errors.js';
-import { findRelatedSources, getArticleByLawId, getLawToc } from './law-service.js';
+import { findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from './law-service.js';
 import { searchJaishTsutatsu } from './jaish-tsutatsu-service.js';
 import { searchMhlwTsutatsu } from './mhlw-tsutatsu-service.js';
 
@@ -65,6 +65,7 @@ export async function getEvidenceBundle(params: {
     item: params.item,
   });
   const retrievedAt = new Date().toISOString();
+  const primaryLatestEnforcedVerified = await verifyLatestEnforced(primary.lawId, primary.revisionInfo);
   const primaryTitle = buildPrimaryTitle(primary.lawTitle, params.article, params.paragraph, params.item);
   const primaryBody = `${primary.articleCaption ? `（${primary.articleCaption}）\n` : ''}${primary.text}`;
   const primaryEvidence: EvidenceRecord = {
@@ -76,7 +77,9 @@ export async function getEvidenceBundle(params: {
     retrieved_at: retrievedAt,
     warnings: [],
     version_info: buildVersionInfoString(primary.lawNum, primary.promulgationDate, primary.revisionInfo),
-    revision_metadata: buildRevisionMetadata(primary.revisionInfo),
+    revision_metadata: buildRevisionMetadata(primary.revisionInfo, {
+      latestEnforcedVerified: primaryLatestEnforcedVerified,
+    }),
     upstream_hash: computeUpstreamHash([primary.lawId, primaryTitle, primaryBody, primary.egovUrl]),
     article_locator: {
       law_id: primary.lawId,
@@ -86,7 +89,9 @@ export async function getEvidenceBundle(params: {
     },
   };
 
-  const primaryRevisionWarnings = getRevisionWarnings(primary.revisionInfo, primary.lawTitle);
+  const primaryRevisionWarnings = getRevisionWarnings(primary.revisionInfo, primary.lawTitle, {
+    latestEnforcedVerified: primaryLatestEnforcedVerified,
+  });
 
   const related = await findRelatedSources({
     lawId: primary.lawId,
@@ -106,6 +111,7 @@ export async function getEvidenceBundle(params: {
   for (const delegatedLaw of related.delegatedLaws) {
     try {
       const toc = await getLawToc({ lawName: delegatedLaw.lawId });
+      const latestEnforcedVerified = await verifyLatestEnforced(delegatedLaw.lawId, toc.revisionInfo);
       delegatedEvidence.push({
         source_type: 'egov',
         canonical_id: `egov:${delegatedLaw.lawId}:toc`,
@@ -115,10 +121,10 @@ export async function getEvidenceBundle(params: {
         retrieved_at: retrievedAt,
         warnings: [],
         version_info: buildVersionInfoString(toc.lawNum, toc.promulgationDate, toc.revisionInfo),
-        revision_metadata: buildRevisionMetadata(toc.revisionInfo),
+        revision_metadata: buildRevisionMetadata(toc.revisionInfo, { latestEnforcedVerified }),
         upstream_hash: computeUpstreamHash([delegatedLaw.lawId, delegatedLaw.lawTitle, toc.toc, toc.egovUrl]),
       });
-      warnings.push(...getRevisionWarnings(toc.revisionInfo, delegatedLaw.lawTitle));
+      warnings.push(...getRevisionWarnings(toc.revisionInfo, delegatedLaw.lawTitle, { latestEnforcedVerified }));
     } catch (error) {
       const failure = mapRelatedSourceFailure('egov', `toc:${delegatedLaw.lawId}`, error);
       warnings.push(failure.warning);

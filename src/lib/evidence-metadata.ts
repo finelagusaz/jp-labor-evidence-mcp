@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { EgovRevisionInfo, PendingAmendment, RevisionMetadata, WarningMessage } from './types.js';
+import { toJstDateString } from './indexes/time.js';
 
 export function computeUpstreamHash(parts: string[]): string {
   const hash = createHash('sha256');
@@ -38,10 +39,12 @@ export function buildVersionPinnedUrl(lawRevisionId: string | null | undefined):
  *   current_enforcement_date ← amendment_enforcement_date
  *   enforcement_note         ← amendment_enforcement_comment
  * version_pinned_url は law_revision_id から導出。全フィールド欠落なら undefined。
+ * latest_enforced_verified は照合済み（options.latestEnforcedVerified）のときだけ true、それ以外は省く。
  * 純粋関数（引数を mutate しない）。
  */
 export function buildRevisionMetadata(
   revisionInfo?: EgovRevisionInfo,
+  options: { latestEnforcedVerified?: boolean } = {},
 ): RevisionMetadata | undefined {
   if (!revisionInfo) return undefined;
   const lawRevisionId = cleanValue(revisionInfo.law_revision_id);
@@ -54,6 +57,7 @@ export function buildRevisionMetadata(
     current_revision_status: cleanValue(revisionInfo.current_revision_status),
     repeal_status: cleanValue(revisionInfo.repeal_status),
     version_pinned_url: buildVersionPinnedUrl(revisionInfo.law_revision_id),
+    latest_enforced_verified: options.latestEnforcedVerified === true ? true : undefined,
   };
   const hasAny = Object.values(metadata).some((value) => value !== undefined);
   return hasAny ? metadata : undefined;
@@ -86,16 +90,21 @@ export function buildVersionInfoString(
  *         または repeal_status が {undefined, 'None'} 以外。
  * 既知 enum は状態別文言、未知の非現行値は fail-safe の汎用文言（raw 値併記）。
  * message は lawTitle を接頭。revisionInfo 欠落・現行版時は空配列。純粋関数。
+ * options.latestEnforcedVerified: isLatestEnforcedRevision で照合済みなら PreviousEnforced でも警告しない。
  */
 export function getRevisionWarnings(
   revisionInfo: EgovRevisionInfo | undefined,
   lawTitle: string,
+  options: { latestEnforcedVerified?: boolean } = {},
 ): WarningMessage[] {
   if (!revisionInfo) return [];
   const status = cleanValue(revisionInfo.current_revision_status);
   const repeal = cleanValue(revisionInfo.repeal_status);
   const repealActive = repeal !== undefined && repeal !== 'None';
-  const notCurrent = status !== undefined && status !== 'CurrentEnforced';
+  // 照合で施行済みの最新版と確認できた PreviousEnforced は e-Gov のタグ付け遅れとみなし現行扱い。
+  // 廃止系の判定（repealActive）には影響させない
+  const staleTag = status === 'PreviousEnforced' && options.latestEnforcedVerified === true;
+  const notCurrent = status !== undefined && status !== 'CurrentEnforced' && !staleTag;
   if (!repealActive && !notCurrent) return [];
 
   const repealDate = cleanValue(revisionInfo.repeal_date);
@@ -117,6 +126,40 @@ export function getRevisionWarnings(
     body = `この法令は現行施行版ではない可能性があります（状態: ${rawState}）。現行の法令を確認してください。`;
   }
   return [{ code: 'LAW_NOT_CURRENTLY_ENFORCED', message: `${lawTitle}: ${body}` }];
+}
+
+/**
+ * law_data が返した版（target）が、/law_revisions の全版の中で「施行済みの最新版」かを判定する。
+ * e-Gov は最新の施行版に PreviousEnforced を付けたままにすることがある（労組法・厚年法、2026-10-04 確認）。
+ * /law_revisions 側でも同じ版が PreviousEnforced なので、タグではなく施行日で比べる
+ * （登録 40 法令の live 調査で、施行日と未施行→施行の切り替えは正確だった）。
+ *
+ * true を返すのは確実に言えるときだけ。次の曖昧なケースはすべて false（＝警告を残す側）:
+ * - target の law_revision_id か amendment_enforcement_date が無い
+ * - target の施行日が今日（JST）より後
+ * - target の law_revision_id が revisions に無い
+ * - UnEnforced 以外の他の版で、施行日が無いもの・target より後のもの・target と同日のもの（順序が決まらない）がある
+ * - target 以外の版が CurrentEnforced
+ * 施行日は YYYY-MM-DD なので文字列比較でよい。純粋関数。
+ */
+export function isLatestEnforcedRevision(
+  target: EgovRevisionInfo,
+  revisions: EgovRevisionInfo[] | undefined,
+  now: number = Date.now(),
+): boolean {
+  const targetId = cleanValue(target.law_revision_id);
+  const targetDate = cleanValue(target.amendment_enforcement_date);
+  if (!targetId || !targetDate || targetDate > toJstDateString(now)) return false;
+  if (!revisions?.some((rev) => cleanValue(rev.law_revision_id) === targetId)) return false;
+
+  return revisions.every((rev) => {
+    if (cleanValue(rev.law_revision_id) === targetId) return true;
+    const status = cleanValue(rev.current_revision_status);
+    if (status === 'UnEnforced') return true;
+    if (status === 'CurrentEnforced') return false;
+    const date = cleanValue(rev.amendment_enforcement_date);
+    return date !== undefined && date < targetDate;
+  });
 }
 
 /**

@@ -13,6 +13,7 @@ vi.mock('../src/lib/services/law-service.js', () => ({
   resolveLaw: vi.fn(),
   getArticleByLawId: vi.fn(),
   findRelatedSources: vi.fn(),
+  verifyLatestEnforced: vi.fn(),
 }));
 
 import { getArticleByLawId } from '../src/lib/services/law-service.js';

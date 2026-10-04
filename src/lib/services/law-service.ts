@@ -4,7 +4,7 @@
  */
 
 import { fetchLawData, fetchLawRevisions, searchLaws, getEgovUrl } from '../egov-client.js';
-import { buildPendingAmendments } from '../evidence-metadata.js';
+import { buildPendingAmendments, isLatestEnforcedRevision } from '../evidence-metadata.js';
 import { NormalizedCache } from '../cache.js';
 import { extractArticle, extractToc } from '../egov-parser.js';
 import { NotFoundError, ValidationError } from '../errors.js';
@@ -435,4 +435,23 @@ export async function getPendingAmendments(
 ): Promise<{ amendments: PendingAmendment[]; excludedCount: number }> {
   const { revisions } = await fetchLawRevisions(lawId);
   return buildPendingAmendments(revisions);
+}
+
+/**
+ * law_data の版に付いた PreviousEnforced がタグ付け遅れかを /law_revisions で照合する。
+ * PreviousEnforced 以外では追加取得せず false。取得失敗も false（警告を残す側に倒す）。
+ * 結果は条文の normalized cache に焼き込まない（/law_revisions 側は raw cache が効く）
+ */
+export async function verifyLatestEnforced(
+  lawId: string,
+  revisionInfo: EgovRevisionInfo | undefined,
+  now: number = Date.now(),
+): Promise<boolean> {
+  if (revisionInfo?.current_revision_status?.trim() !== 'PreviousEnforced') return false;
+  try {
+    const { revisions } = await fetchLawRevisions(lawId);
+    return isLatestEnforcedRevision(revisionInfo, revisions, now);
+  } catch {
+    return false;
+  }
 }

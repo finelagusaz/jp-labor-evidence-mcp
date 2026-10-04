@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { buildEgovArticleCanonicalId } from '../lib/canonical-id.js';
 import { computeUpstreamHash, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings, getPendingAmendmentWarnings } from '../lib/evidence-metadata.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
-import { getArticleByLawId, getPendingAmendments } from '../lib/services/law-service.js';
+import { getArticleByLawId, getPendingAmendments, verifyLatestEnforced } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope, revisionMetadataSchema, pendingAmendmentSchema } from '../lib/tool-contract.js';
 import { observabilityRegistry } from '../lib/observability.js';
 import type { PendingAmendment } from '../lib/types.js';
@@ -72,9 +72,13 @@ export function registerGetArticleTool(server: McpServer) {
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
         const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
         const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo);
-        const revisionMetadata = buildRevisionMetadata(result.revisionInfo);
         const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
-        const warnings = [...freshnessWarnings, ...getRevisionWarnings(result.revisionInfo, result.lawTitle)];
+        const latestEnforcedVerified = await verifyLatestEnforced(result.lawId, result.revisionInfo);
+        const revisionMetadata = buildRevisionMetadata(result.revisionInfo, { latestEnforcedVerified });
+        const warnings = [
+          ...freshnessWarnings,
+          ...getRevisionWarnings(result.revisionInfo, result.lawTitle, { latestEnforcedVerified }),
+        ];
         const partialFailures: Array<{ source: string; target: string; reason: string }> = [];
         let degraded = false;
         let pendingAmendments: PendingAmendment[] | undefined;
