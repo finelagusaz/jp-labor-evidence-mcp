@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { NormalizedCache, TTLCache } from '../src/lib/cache.js';
 import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
 import { observabilityRegistry } from '../src/lib/observability.js';

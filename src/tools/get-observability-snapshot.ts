@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { observabilityRegistry } from '../lib/observability.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow } from '../lib/tool-contract.js';

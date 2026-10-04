@@ -3,9 +3,9 @@ import { createServer } from '../src/server.js';
 import { getServerInstructions } from './test-helpers/mcp-internals.js';
 
 describe('server instructions', () => {
-  it('freshness warnings のガイダンスが instructions に含まれる', () => {
+  it('freshness warnings のガイダンスが instructions に含まれる', async () => {
     const server = createServer();
-    const instructions = getServerInstructions(server);
+    const instructions = await getServerInstructions(server);
     expect(instructions).toBeDefined();
     expect(instructions).toContain('freshness warnings');
     expect(instructions).toContain('BUNDLED_INDEX_AGED');

@@ -3,7 +3,7 @@
  * 社労士実務に沿ったワークフローテンプレートを提供する
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 export function registerPrompts(server: McpServer) {
@@ -19,13 +19,15 @@ export function registerPrompts(server: McpServer) {
  * 社労士の法令調査実務を想定。
  */
 function registerLaborLawResearchPrompt(server: McpServer) {
-  server.prompt(
+  server.registerPrompt(
     'labor_law_research',
-    '労務テーマについて法令・通達を体系的に調査する。法令の根拠条文と行政通達を併せて確認するワークフロー。',
     {
-      topic: z.string().describe(
-        '調査テーマ。例: "時間外労働の上限規制", "育児休業の取得要件", "社会保険の適用拡大", "有期雇用の無期転換"'
-      ),
+      description: '労務テーマについて法令・通達を体系的に調査する。法令の根拠条文と行政通達を併せて確認するワークフロー。',
+      argsSchema: z.object({
+        topic: z.string().describe(
+          '調査テーマ。例: "時間外労働の上限規制", "育児休業の取得要件", "社会保険の適用拡大", "有期雇用の無期転換"'
+        ),
+      }),
     },
     async (args) => ({
       messages: [
@@ -78,16 +80,18 @@ ${args.topic}
  * 厚労省法令等DBとJAISH安全衛生情報センターの両方を活用。
  */
 function registerTsutatsuResearchPrompt(server: McpServer) {
-  server.prompt(
+  server.registerPrompt(
     'tsutatsu_research',
-    '行政通達を重点的に調査する。厚労省法令等DBとJAISH安全衛生情報センターから通達を検索・取得する。',
     {
-      keyword: z.string().describe(
-        '検索キーワード。例: "36協定", "労災認定基準", "パワーハラスメント", "特定化学物質"'
-      ),
-      scope: z.enum(['all', 'mhlw', 'jaish']).optional().describe(
-        '検索範囲。all=両方（デフォルト）, mhlw=厚労省通達のみ, jaish=安衛通達のみ'
-      ),
+      description: '行政通達を重点的に調査する。厚労省法令等DBとJAISH安全衛生情報センターから通達を検索・取得する。',
+      argsSchema: z.object({
+        keyword: z.string().describe(
+          '検索キーワード。例: "36協定", "労災認定基準", "パワーハラスメント", "特定化学物質"'
+        ),
+        scope: z.enum(['all', 'mhlw', 'jaish']).optional().describe(
+          '検索範囲。all=両方（デフォルト）, mhlw=厚労省通達のみ, jaish=安衛通達のみ'
+        ),
+      }),
     },
     async (args) => {
       const scope = args.scope ?? 'all';
@@ -139,13 +143,15 @@ ${steps.join('\n')}
  * 安衛法の条文とJAISH通達を中心に調査。
  */
 function registerSafetyHealthResearchPrompt(server: McpServer) {
-  server.prompt(
+  server.registerPrompt(
     'safety_health_research',
-    '労働安全衛生に関する法令・通達を調査する。安衛法の条文、安衛則、関連通達を体系的に確認するワークフロー。',
     {
-      topic: z.string().describe(
-        '調査テーマ。例: "健康診断の実施義務", "化学物質管理", "足場の安全基準", "ストレスチェック制度"'
-      ),
+      description: '労働安全衛生に関する法令・通達を調査する。安衛法の条文、安衛則、関連通達を体系的に確認するワークフロー。',
+      argsSchema: z.object({
+        topic: z.string().describe(
+          '調査テーマ。例: "健康診断の実施義務", "化学物質管理", "足場の安全基準", "ストレスチェック制度"'
+        ),
+      }),
     },
     async (args) => ({
       messages: [
