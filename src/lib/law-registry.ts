@@ -147,9 +147,10 @@ export interface LawRegistryCandidate {
 
 /**
  * e-Gov law_id 形式かどうかを判定する
+ * 法令種別コードは英字 2 文字とは限らない（省令 322M40000100023・憲法 321CONSTITUTION）
  */
 export function isEgovLawId(input: string): boolean {
-  return /^\d{3}[A-Z]{2}\d{10}$/.test(input);
+  return /^\d{3}[A-Z][A-Z0-9]{11}$/.test(input);
 }
 
 /**

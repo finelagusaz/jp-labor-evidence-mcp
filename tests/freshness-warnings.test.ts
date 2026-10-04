@@ -5,8 +5,18 @@ const DAY = 24 * 60 * 60 * 1000;
 // Keep in sync with GENERATED_AT in src/lib/indexes/egov-index.ts.
 // All time references below derive from this single base so a GENERATED_AT
 // bump only requires editing this one line.
-const GENERATED_AT_ISO = '2026-07-13T00:00:00.000Z';
+const GENERATED_AT_ISO = '2026-10-04T00:00:00.000Z';
 const GENERATED_AT_MS = Date.parse(GENERATED_AT_ISO);
+const JST_OFFSET = 9 * 60 * 60 * 1000;
+// GENERATED_AT より後に来る最初の 4/1・10/1 00:00 JST（UTC ms）。
+// 境界跨ぎ test の now をここから導出し、GENERATED_AT bump で test が壊れないようにする
+const NEXT_BOUNDARY_AFTER_GENERATED_MS = (() => {
+  const jst = new Date(GENERATED_AT_MS + JST_OFFSET);
+  const y = jst.getUTCFullYear();
+  const m = jst.getUTCMonth() + 1;
+  const [by, bm] = m < 4 ? [y, 4] : m < 10 ? [y, 10] : [y + 1, 4];
+  return Date.UTC(by, bm - 1, 1) - JST_OFFSET;
+})();
 
 describe('freshness-warnings', () => {
   beforeEach(() => {
@@ -207,13 +217,12 @@ describe('freshness-warnings', () => {
   });
 
   describe('getBundledIndexWarnings - calendar boundary', () => {
-    it('60日以内でも 直近の 10/1 JST を跨いでいたら警告を返す', async () => {
-      // GENERATED_AT (2026-06-10T00:00:00Z) は 2026/10/1 JST より前
-      // now = 2026-10-01T15:00:00.000Z = 2026/10/02 00:00 JST （10/1 を跨いだ直後）
-      // 経過 ≈ 113 日 → 60日 check も既に発火するため、警告自体は元々出る
+    it('直近の 4/1・10/1 JST を跨いでいたら警告を返す', async () => {
+      // now = GENERATED_AT 後の最初の境界の翌日 00:00 JST（境界を跨いだ直後）
+      // 境界は生成日から 60 日超先になりうるため 60日 check も発火しうる
       // よって本テストは「境界跨ぎ後にも適切な message 文言が出る」を verify する
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      const now = Date.parse('2026-10-01T15:00:00.000Z');
+      const now = NEXT_BOUNDARY_AFTER_GENERATED_MS + DAY;
       const warnings = getBundledIndexWarnings(now);
       expect(warnings).toHaveLength(1);
       expect(warnings[0]?.code).toBe('BUNDLED_INDEX_AGED');
@@ -221,8 +230,8 @@ describe('freshness-warnings', () => {
     });
 
     it('境界を跨いでいなければ 60日内では警告を返さない（既存挙動の維持）', async () => {
-      // GENERATED_AT (2026-06-10) は 2026/4/1 境界の後。
-      // now = GENERATED_AT + 30日 → まだ 60日内、かつ直近境界 4/1 を generated が跨いでいない
+      // 直近境界は GENERATED_AT より前（GENERATED_AT は直前の境界を既に跨いだ後に生成）
+      // now = GENERATED_AT + 30日 → まだ 60日内、かつ直近境界を generated が跨いでいない
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
       const now = GENERATED_AT_MS + 30 * DAY;
       expect(getBundledIndexWarnings(now)).toEqual([]);
@@ -343,16 +352,17 @@ describe('freshness-warnings', () => {
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
       const now = GENERATED_AT_MS + 61 * DAY;
       const message = getBundledIndexWarnings(now)[0]?.message ?? '';
-      expect(message).toContain('生成日: 2026-07-13 JST');
+      expect(message).toContain('生成日: 2026-10-04 JST');
     });
 
     it('boundary note の施行日は JST 表記（4/1・10/1 を UTC ズレなく表示）', async () => {
       const { getBundledIndexWarnings } = await import('../src/lib/indexes/freshness-warnings.js');
-      // now = 2026-10-02 00:00 JST（10/1 JST 境界を跨いだ直後）
-      const now = Date.parse('2026-10-01T15:00:00.000Z');
+      // now = GENERATED_AT 後の最初の境界の翌日 00:00 JST（境界を跨いだ直後）
+      const now = NEXT_BOUNDARY_AFTER_GENERATED_MS + DAY;
       const message = getBundledIndexWarnings(now)[0]?.message ?? '';
-      expect(message).toContain('施行日 2026-10-01 JST');
-      expect(message).not.toContain('2026-09-30');
+      // UTC で読むと前日（3/31・9/30）にズレるので、日付が 01 であることで JST 表記を確かめる
+      expect(message).toMatch(/施行日 \d{4}-(04|10)-01 JST/);
+      expect(message).not.toMatch(/\d{4}-(03-31|09-30)/);
     });
   });
 });
