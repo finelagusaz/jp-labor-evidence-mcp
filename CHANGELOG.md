@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-04
+
 ### Changed
 
 - **MCP 2026-07-28 に対応**。SDK を v1 `@modelcontextprotocol/sdk` から v2 `@modelcontextprotocol/server` `^2.3.0` へ移行し、stdio の起動を `serveStdio` に切り替えた。接続の最初のメッセージで世代を判定し、2026-07-28（`server/discover`、stateless、`resultType`・`ttlMs`/`cacheScope` 付き応答、結果 `_meta` の `serverInfo`）と従来の 2025 系（`initialize`）の両方に応答する。ツール・リソース・プロンプトの外形と `instructions` は両世代で同一
