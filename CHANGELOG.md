@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-04
+
+### Changed
+
+- （データ）bundled law index の `GENERATED_AT` を `2026-10-04` に更新。`verify:egov` で全 40 法令の現存性・正式名称を live e-Gov と照合した裏付けの上で再スタンプ（メタデータの現在性を保証。条文改正の反映は非保証）。0.7.0 では生成から 60 日を超え、e-Gov 系 tool の応答に `BUNDLED_INDEX_AGED` が付いていた
+- （テスト）freshness 系の 4/1・10/1 境界跨ぎテストの現在時刻を固定日付から `GENERATED_AT_ISO` 由来へ変更。境界を越える `GENERATED_AT` 更新でテストが赤化しないようにした
+
 ## [0.7.0] - 2026-10-04
 
 ### Changed
