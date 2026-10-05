@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerGetArticleTool } from './tools/get-article.js';
+import { registerListSupplProvisionsTool } from './tools/list-suppl-provisions.js';
 import { registerGetEvidenceBundleTool } from './tools/get-evidence-bundle.js';
 import { registerDiffRevisionTool } from './tools/diff-revision.js';
 import { registerFindRelatedSourcesTool } from './tools/find-related-sources.js';
@@ -55,6 +56,7 @@ warnings の message は既に利用者向け日本語になっています。pa
   // 法令ツール（e-Gov API v2）
   registerResolveLawTool(server);   // resolve_law: 法令候補の確定
   registerGetArticleTool(server);   // get_article: law_id 指定で条文取得
+  registerListSupplProvisionsTool(server); // list_suppl_provisions: 附則の一覧
   registerFindRelatedSourcesTool(server); // find_related_sources: 委任先法令と探索キーワード
   registerGetEvidenceBundleTool(server); // get_evidence_bundle: 条文 + 関連通達候補の束ね
   registerDiffRevisionTool(server);  // diff_revision: 2 law_id 間の条文差分

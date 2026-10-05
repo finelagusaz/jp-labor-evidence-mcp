@@ -89,3 +89,44 @@ describe('get_article: 附則・細分・号', () => {
     expect(bad.status).toBe('invalid');
   });
 });
+
+describe('list_suppl_provisions', () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('新しい順の一覧と、get_article にそのまま渡せる key を返す', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'list_suppl_provisions', { law_id: '322M40000100023' });
+    expect(env.status).toBe('ok');
+    expect(env.data).toMatchObject({ law_title: '労働基準法施行規則', total: 4, has_more: false });
+    expect(env.data.items.map((i: any) => i.key)).toEqual([
+      '令和8年厚生労働省令第57号', '平成13年厚生労働省令第2号', '平成元年労働省令第1号', '制定',
+    ]);
+    expect(env.data.items[2]).toMatchObject({
+      canonical_id: 'egov:322M40000100023:suppl:平成元年労働省令第1号',
+      amend_law_num: '平成元年二月一〇日労働省令第一号',
+      extract: false, article_count: 0, paragraph_count: 2,
+    });
+    expect(env.data.version_info).toBeDefined();
+
+    const picked = await callTool<any>(server, 'get_article', { law_id: '322M40000100023', supplementary: env.data.items[2].key, paragraph: 1 });
+    expect(picked.status).toBe('ok');
+    expect(picked.data.canonical_id).toBe('egov:322M40000100023:suppl:平成元年労働省令第1号:paragraph:1');
+  });
+
+  it('絞り込み・limit・offset', async () => {
+    const server = await connect();
+    const byYear = await callTool<any>(server, 'list_suppl_provisions', { law_id: '322M40000100023', amendment_law_num: '令和8年' });
+    expect(byYear.data.items.map((i: any) => i.key)).toEqual(['令和8年厚生労働省令第57号']);
+    const page = await callTool<any>(server, 'list_suppl_provisions', { law_id: '322M40000100023', limit: 1, offset: 1 });
+    expect(page.data).toMatchObject({ total: 4, has_more: true });
+    expect(page.data.items.map((i: any) => i.key)).toEqual(['平成13年厚生労働省令第2号']);
+  });
+
+  it('解釈できない絞り込みは invalid', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'list_suppl_provisions', { law_id: '322M40000100023', amendment_law_num: 'あいう' });
+    expect(env.status).toBe('invalid');
+  });
+});
+
