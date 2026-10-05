@@ -10,6 +10,8 @@
  */
 
 import type { EgovNode, EgovLawData } from './types.js';
+import { ValidationError } from './errors.js';
+import { formatSupplKey, kanjiToNumber, lawNumMatches, parseLawNum, type ParsedLawNum } from './law-num.js';
 
 // ============================
 // 条文番号の正規化
@@ -33,47 +35,135 @@ export function normalizeArticleNum(input: string): string {
 // ============================
 
 /**
- * 法令全文から特定の条文を抽出する
+ * 号の番号を正規化する（"3" / 3 / "3の2" / "三の二" / "第3号" → "3" / "3_2"）。
+ * Item@Num（"3_2"）と同じ形にそろえる。変換できなければ undefined
+ */
+export function normalizeItemNum(input: string | number): string | undefined {
+  const s = String(input).normalize('NFKC').trim().replace(/^第/, '').replace(/号/g, '');
+  if (!s) return undefined;
+  const parts = s.split(/[のノ_-]/);
+  const nums = parts.map((part) => kanjiToNumber(part));
+  if (nums.some((n) => n === undefined)) return undefined;
+  return nums.join('_');
+}
+
+/**
+ * 号の下の細分の指定を階層ごとの正規形に分ける
+ * （"イ (1)" / "イ-(1)-(i)" / "イ（１）（ｉ）" / "イ/1/i" → ["イ", "1", "i"]）
+ */
+export function normalizeSubitemPath(input: string): string[] {
+  const s = input.normalize('NFKC');
+  const tokens: string[] = [];
+  for (const m of s.matchAll(/\(([^()]+)\)|([^\s()\-/,、・.]+)/g)) {
+    const token = (m[1] ?? m[2] ?? '').trim().toLowerCase();
+    if (token) tokens.push(token);
+  }
+  return tokens;
+}
+
+/** 細分の見出し（"（ｉｉｉ）"）を比較用に正規化する */
+function normalizeSubitemLabel(input: string): string {
+  return input.normalize('NFKC').replace(/[()\s]/g, '').toLowerCase();
+}
+
+export interface ExtractResult {
+  text: string;
+  articleCaption: string;
+  /** paragraph を省いて item から項を特定したときの項番号 */
+  matchedParagraph?: number;
+}
+
+export interface ExtractTarget {
+  article?: string;
+  paragraph?: number;
+  item?: number | string;
+  subitem?: string;
+}
+
+/**
+ * 法令全文から本則の条文を抽出する。
+ * paragraph を省いて item を渡すと全項から探し、一致が複数なら ValidationError
  */
 export function extractArticle(
   lawData: EgovLawData,
   articleNum: string,
   paragraph?: number,
-  item?: number,
-): { text: string; articleCaption: string } | null {
-  const normalized = normalizeArticleNum(articleNum);
+  item?: number | string,
+  subitem?: string,
+): ExtractResult | null {
   const mainProvision = findNode(lawData.law_full_text, 'MainProvision');
   if (!mainProvision) return null;
+  const article = findArticleWithFallback(mainProvision, articleNum);
+  if (!article) return null;
+  return extractFromArticle(article, { paragraph, item, subitem });
+}
 
+function findArticleWithFallback(scope: EgovNode, articleNum: string): EgovNode | null {
+  const normalized = normalizeArticleNum(articleNum);
   // 正規化した番号で検索、見つからなければ int 変換でフォールバック (takurot版参考)
-  let article = findArticleNode(mainProvision, normalized);
+  let article = findArticleNode(scope, normalized);
   if (!article) {
     const intNormalized = String(parseInt(normalized.split('_')[0], 10));
     if (intNormalized !== normalized.split('_')[0]) {
       const fallback = normalized.replace(/^\d+/, intNormalized);
-      article = findArticleNode(mainProvision, fallback);
+      article = findArticleNode(scope, fallback);
     }
   }
-  if (!article) return null;
+  return article;
+}
 
-  const caption = getText(findNode(article, 'ArticleCaption'));
-  const lines: string[] = [];
-
-  if (paragraph !== undefined) {
-    const para = findParagraphNode(article, paragraph);
-    if (!para) return null;
-    if (item !== undefined) {
-      const itemNode = findItemNode(para, item);
-      if (!itemNode) return null;
-      parseItem(itemNode, lines, 0);
-    } else {
-      parseParagraph(para, lines);
-    }
-  } else {
+function extractFromArticle(article: EgovNode, target: ExtractTarget): ExtractResult | null {
+  const articleCaption = getText(findNode(article, 'ArticleCaption'));
+  if (target.paragraph === undefined && target.item === undefined) {
+    const lines: string[] = [];
     parseArticle(article, lines);
+    return { text: lines.join('\n').trim(), articleCaption };
+  }
+  const resolved = resolveInParagraphs(directChildren(article, 'Paragraph'), target);
+  return resolved ? { ...resolved, articleCaption } : null;
+}
+
+/** 項の並びから、項・号・細分を解決してテキスト化する */
+function resolveInParagraphs(
+  paragraphs: EgovNode[],
+  target: ExtractTarget,
+): { text: string; matchedParagraph?: number } | null {
+  const render = (node: EgovNode, kind: 'paragraph' | 'item' | 'subitem'): string => {
+    const lines: string[] = [];
+    if (kind === 'paragraph') parseParagraph(node, lines);
+    else if (kind === 'item') parseItem(node, lines, 0);
+    else parseSubitem(node, lines, 0);
+    return lines.join('\n').trim();
+  };
+  const path = target.subitem !== undefined ? normalizeSubitemPath(target.subitem) : [];
+  const resolveItem = (para: EgovNode): EgovNode | null => {
+    const itemNode = findItemNode(para, target.item!);
+    if (!itemNode) return null;
+    return path.length > 0 ? findSubitemNode(itemNode, path) : itemNode;
+  };
+  const leafKind = path.length > 0 ? 'subitem' : 'item';
+
+  if (target.paragraph !== undefined) {
+    const para = paragraphs.find((p) => parseInt(p.attr?.Num ?? '', 10) === target.paragraph);
+    if (!para) return null;
+    if (target.item === undefined) return { text: render(para, 'paragraph') };
+    const node = resolveItem(para);
+    return node ? { text: render(node, leafKind) } : null;
   }
 
-  return { text: lines.join('\n').trim(), articleCaption: caption };
+  const hits: Array<{ paragraphNum: number; node: EgovNode }> = [];
+  for (const para of paragraphs) {
+    const node = resolveItem(para);
+    if (node) hits.push({ paragraphNum: parseInt(para.attr?.Num ?? '1', 10), node });
+  }
+  if (hits.length === 0) return null;
+  if (hits.length > 1) {
+    const where = hits.map((h) => `第${h.paragraphNum}項`).join('、');
+    throw new ValidationError(
+      `指定した号は複数の項（${where}）にあります。paragraph で項を指定してください。`,
+    );
+  }
+  return { text: render(hits[0].node, leafKind), matchedParagraph: hits[0].paragraphNum };
 }
 
 /**
@@ -94,6 +184,128 @@ export function extractToc(lawData: EgovLawData): string {
   const lines: string[] = [];
   collectToc(mainProvision, lines, 0);
   return lines.join('\n');
+}
+
+// ============================
+// 附則（SupplProvision）
+// ============================
+
+export interface SupplProvisionInfo {
+  /** LawBody 内の附則の並び順（e-Gov の並び＝制定時が先頭、以降は古い順） */
+  index: number;
+  /** 正規形。制定時は「制定」、改正附則は「令和8年法律第46号」 */
+  key: string;
+  /** e-Gov の AmendLawNum（加工しない）。制定時附則は undefined */
+  amendLawNum?: string;
+  parsed?: ParsedLawNum;
+  /** 抄 */
+  extract: boolean;
+  articleNums: string[];
+  /** 附則ブロック直下の項の数（条を持たない附則で意味を持つ） */
+  paragraphCount: number;
+}
+
+const ENACTMENT_KEY = '制定';
+
+function supplProvisionNodes(lawData: EgovLawData): EgovNode[] {
+  const body = findNode(lawData.law_full_text, 'LawBody');
+  return body ? directChildren(body, 'SupplProvision') : [];
+}
+
+function collectByTag(node: EgovNode, tag: string, out: EgovNode[]): void {
+  for (const child of node.children ?? []) {
+    if (typeof child === 'string') continue;
+    if (child.tag === tag) out.push(child);
+    else collectByTag(child, tag, out);
+  }
+}
+
+/** 法令中のすべての附則を e-Gov の並びで列挙する */
+export function listSupplProvisions(lawData: EgovLawData): SupplProvisionInfo[] {
+  return supplProvisionNodes(lawData).map((node, index) => {
+    const amendLawNum = node.attr?.AmendLawNum?.trim() || undefined;
+    const parsed = amendLawNum ? parseLawNum(amendLawNum) : undefined;
+    const articles: EgovNode[] = [];
+    collectByTag(node, 'Article', articles);
+    return {
+      index,
+      key: amendLawNum ? (parsed ? formatSupplKey(parsed) : amendLawNum) : ENACTMENT_KEY,
+      amendLawNum,
+      parsed,
+      extract: node.attr?.Extract === 'true',
+      articleNums: articles.map((a) => (a.attr?.Num ?? '').replace(/_/g, 'の')),
+      paragraphCount: directChildren(node, 'Paragraph').length,
+    };
+  });
+}
+
+/**
+ * 附則を 1 つ選ぶ。「制定」/「制定時」は制定時附則、それ以外は改正法の法令番号（2 つの表記を受け付ける）。
+ * 該当なしは null。番号の無い・解析できない入力と、複数に一致した場合は ValidationError
+ */
+export function selectSupplProvision(lawData: EgovLawData, query: string): SupplProvisionInfo | null {
+  const all = listSupplProvisions(lawData);
+  const q = query.normalize('NFKC').trim();
+  if (q === ENACTMENT_KEY || q === '制定時') {
+    return all.find((s) => s.amendLawNum === undefined) ?? null;
+  }
+  const wanted = parseLawNum(q);
+  if (!wanted || wanted.number === undefined) {
+    throw new ValidationError(
+      `附則の指定「${query}」を解釈できません。「制定」または改正法の法令番号（例: "令和8年法律第46号"、"令和八年法律第四十六号"）を指定してください。`,
+    );
+  }
+  const exact = all.filter((s) => s.amendLawNum === q);
+  const matched = exact.length > 0 ? exact : all.filter((s) => s.parsed && lawNumMatches(wanted, s.parsed));
+  if (matched.length === 0) return null;
+  if (matched.length > 1) {
+    throw new ValidationError(
+      `附則の指定「${query}」が複数の附則に一致しました: ${matched.map((s) => s.key).join('、')}。種別まで含めて指定してください。`,
+    );
+  }
+  return matched[0];
+}
+
+/**
+ * 選んだ附則から条・項・号・細分を抽出する。article を省くと附則ブロック直下を対象にし、
+ * 何も指定しなければブロック全体を返す。条を持つ附則で article を省いて項以下を指定したら ValidationError
+ */
+export function extractSupplProvision(
+  lawData: EgovLawData,
+  info: SupplProvisionInfo,
+  target: ExtractTarget,
+): ExtractResult | null {
+  const node = supplProvisionNodes(lawData)[info.index];
+  if (!node) return null;
+
+  if (target.article !== undefined) {
+    const article = findArticleWithFallback(node, target.article);
+    return article ? extractFromArticle(article, target) : null;
+  }
+
+  if (target.paragraph === undefined && target.item === undefined) {
+    const lines: string[] = [];
+    for (const child of node.children ?? []) {
+      if (typeof child === 'string') continue;
+      if (child.tag === 'Article') {
+        parseArticle(child, lines);
+        lines.push('');
+      } else if (child.tag === 'Paragraph') {
+        parseParagraph(child, lines);
+      }
+    }
+    const text = lines.join('\n').trim();
+    return text ? { text, articleCaption: '' } : null;
+  }
+
+  const paragraphs = directChildren(node, 'Paragraph');
+  if (paragraphs.length === 0) {
+    throw new ValidationError(
+      `この附則（${info.key}）は条で構成されています。article を指定してください（条: ${info.articleNums.join(', ')}）。`,
+    );
+  }
+  const resolved = resolveInParagraphs(paragraphs, target);
+  return resolved ? { ...resolved, articleCaption: '' } : null;
 }
 
 // ============================
@@ -163,28 +375,41 @@ function findArticleNode(node: EgovNode, normalizedNum: string): EgovNode | null
   return null;
 }
 
-function findParagraphNode(article: EgovNode, paragraphNum: number): EgovNode | null {
-  if (!article.children) return null;
-  for (const child of article.children) {
-    if (typeof child === 'string') continue;
-    if (child.tag === 'Paragraph') {
-      const num = child.attr?.Num;
-      if (num && parseInt(num, 10) === paragraphNum) return child;
-    }
+function findItemNode(paragraph: EgovNode, itemNum: number | string): EgovNode | null {
+  const wanted = normalizeItemNum(itemNum);
+  if (wanted === undefined) return null;
+  for (const child of directChildren(paragraph, 'Item')) {
+    const num = child.attr?.Num;
+    const actual = num !== undefined
+      ? normalizeItemNum(num)
+      : normalizeItemNum(getText(findDirectChild(child, 'ItemTitle')));
+    if (actual === wanted) return child;
   }
   return null;
 }
 
-function findItemNode(paragraph: EgovNode, itemNum: number): EgovNode | null {
-  if (!paragraph.children) return null;
-  for (const child of paragraph.children) {
-    if (typeof child === 'string') continue;
-    if (child.tag === 'Item') {
-      const num = child.attr?.Num;
-      if (num && parseInt(num, 10) === itemNum) return child;
-    }
+/** 号の下の細分（Subitem1 → Subitem2 → …）を深さ順にたどる。各階層は Num と見出しの両方で照合する */
+function findSubitemNode(item: EgovNode, path: string[]): EgovNode | null {
+  let current = item;
+  for (let depth = 1; depth <= path.length; depth++) {
+    const tag = `Subitem${depth}`;
+    const token = path[depth - 1];
+    const next = directChildren(current, tag).find((child) => {
+      const label = normalizeSubitemLabel(getText(findDirectChild(child, `${tag}Title`)));
+      return label === token || (child.attr?.Num !== undefined && child.attr.Num === token);
+    });
+    if (!next) return null;
+    current = next;
   }
-  return null;
+  return current;
+}
+
+function directChildren(node: EgovNode, tag: string): EgovNode[] {
+  return (node.children ?? []).filter((c): c is EgovNode => typeof c !== 'string' && c.tag === tag);
+}
+
+function findDirectChild(node: EgovNode, tag: string): EgovNode | null {
+  return directChildren(node, tag)[0] ?? null;
 }
 
 // ============================

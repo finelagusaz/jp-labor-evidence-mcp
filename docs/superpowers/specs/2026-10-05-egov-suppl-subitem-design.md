@@ -104,7 +104,7 @@ suppl key は出力（一覧・`get_article`・`canonical_id`）で使い、入�
 - 本則と附則で同じ探し方を使う（`extractArticleFromScope(scope, …)`）。附則では `supplementary` で選んだ `SupplProvision` が scope
 - **条を持たない附則**（労基則では 188 件中 135 件）: `supplementary` があり `article` を省いたときは、`paragraph` / `item` / `subitem` を附則ブロック直下の `Paragraph` に対して解決する。どれも省けば附則ブロック全体を返す。条を持つ附則で `article` を省いた場合も附則ブロック全体を返す（`paragraph` 以下を指定したら、条を指定するよう `ValidationError`）。upstream は `article` が無いと `paragraph` を無視するが、こちらはしない
 - 号の照合: `Num` 属性を正規化した値と、`ItemTitle` の漢数字を算用数字にした値の両方で比べる
-- `paragraph` を省いて `item` を渡したとき: 全項から一致する号を探す。1 件ならその項を使い `data.paragraph` に返す。**2 件以上なら `ValidationError`** で一致した項番号を示す（upstream は subitem が解決できる項を優先するが、推測で選ばない）。0 件なら `not_found`
+- `paragraph` を省いて `item` を渡したとき: 全項から、号（`subitem` があれば細分まで）の経路が一致するものを探す。1 件ならその項を使い `data.paragraph` に返す。**2 件以上なら `ValidationError`** で一致した項番号を示す。0 件なら `not_found`。号の番号だけでは複数の項に一致しても、`subitem` まで含めた経路が 1 件に決まれば一意とみなす（例: 労基則 第7条の2 の第2号は第1項と第2項にあるが、「ロ（１）」を持つのは第1項だけ）
 - subitem: `Subitem1` → `Subitem2` → `Subitem3` と深さ順にたどる。各階層で `Num` と見出し（全角・括弧を正規化）の両方で比べる
 - subitem の正規形: 入力（`"イ (1)"`、`"イ-(1)-(i)"`、`"イ（１）（ｉ）"` など）を階層に分け、各階層を NFKC → 括弧と空白を除く → 小文字にして `/` で結ぶ（例: `イ/1/i`）。`canonical_id` と `data.subitem` はこの正規形を使う
 
