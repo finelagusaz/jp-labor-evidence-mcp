@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-06
+
+### Fixed
+
+- 条文の `body` の先頭の条見出しが `（（労働時間））` と括弧が二重になっていた（`get_article` / `get_evidence_bundle` / `diff_revision`、deprecated の `get_law`）。e-Gov の条見出しは括弧つきで届くため、取り出す時点で外側の括弧を外すようにした
+- 同じ原因で、関連通達の検索キーワードに括弧つきの条見出し（`（労働時間）`）が入っていた（`get_evidence_bundle` / `find_related_sources`）。また通達の順位づけで「条見出しを含むか」の判定が括弧つきの形で行われ、ほとんど成り立っていなかった。どちらも括弧なしの語（`労働時間`）を使う。`find_related_sources` の `article_caption` に括弧つきで渡された場合も同じく外す
+
 ## [0.8.0] - 2026-10-06
 
 ### Added

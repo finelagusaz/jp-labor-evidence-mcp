@@ -15,7 +15,7 @@ import { registerGetJaishTsutatsuTool } from './tools/get-jaish-tsutatsu.js';
 import { registerPrompts } from './prompts/index.js';
 import { registerStatusResource } from './resources/status.js';
 
-const SERVER_VERSION = '0.8.0';
+const SERVER_VERSION = '0.8.1';
 
 export function createServer(): McpServer {
   const server = new McpServer(
