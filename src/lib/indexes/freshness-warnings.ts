@@ -2,11 +2,10 @@ import { getEgovIndexMeta } from './egov-index.js';
 import { indexMetadataRegistry, inferFreshness } from './index-metadata.js';
 import type { IndexSource } from './types.js';
 import type { WarningMessage } from '../types.js';
-import { DAY_MS } from './time.js';
+import { DAY_MS, JST_OFFSET_MS, toJstDateString } from './time.js';
 
 export const BUNDLED_AGE_THRESHOLD_DAYS = 60;
 const BUNDLED_AGE_THRESHOLD_MS = BUNDLED_AGE_THRESHOLD_DAYS * DAY_MS;
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 export type FreshnessWarning = {
   code: 'BUNDLED_INDEX_AGED' | 'RUNTIME_INDEX_STALE';
@@ -26,7 +25,7 @@ const SOURCE_LABELS: Record<'mhlw' | 'jaish', string> = {
  * off-by-one on JST-midnight boundary timestamps (e.g. 4/1 / 10/1 施行日).
  */
 function formatJstDate(ms: number): string {
-  return `${new Date(ms + JST_OFFSET_MS).toISOString().slice(0, 10)} JST`;
+  return `${toJstDateString(ms)} JST`;
 }
 
 /**

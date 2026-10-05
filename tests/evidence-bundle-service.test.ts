@@ -5,6 +5,7 @@ vi.mock('../src/lib/services/law-service.js', () => ({
   getArticleByLawId: vi.fn(),
   getLawToc: vi.fn(),
   findRelatedSources: vi.fn(),
+  verifyLatestEnforced: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('../src/lib/services/mhlw-tsutatsu-service.js', () => ({
@@ -15,7 +16,7 @@ vi.mock('../src/lib/services/jaish-tsutatsu-service.js', () => ({
   searchJaishTsutatsu: vi.fn(),
 }));
 
-import { findRelatedSources, getArticleByLawId, getLawToc } from '../src/lib/services/law-service.js';
+import { findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from '../src/lib/services/law-service.js';
 import { searchMhlwTsutatsu } from '../src/lib/services/mhlw-tsutatsu-service.js';
 import { searchJaishTsutatsu } from '../src/lib/services/jaish-tsutatsu-service.js';
 import { getEvidenceBundle } from '../src/lib/services/evidence-bundle-service.js';
@@ -463,5 +464,40 @@ describe('getEvidenceBundle', () => {
     const bundle = await getEvidenceBundle({ lawId: '000AC0000000000', article: '1', includeJaish: false });
     expect(bundle.primary_evidence.revision_metadata?.repeal_status).toBe('Repeal');
     expect(bundle.warnings.some((w) => w.code === 'LAW_NOT_CURRENTLY_ENFORCED' && w.message.includes('旧・某法'))).toBe(true);
+  });
+
+  it('PreviousEnforced でも照合で最新の施行版なら、主条文・委任先とも警告せず照合結果を載せる', async () => {
+    const staleTag = {
+      law_revision_id: '324AC0000000174_20260624_508AC0000000046',
+      amendment_enforcement_date: '2026-06-24',
+      current_revision_status: 'PreviousEnforced', repeal_status: 'None',
+    };
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '324AC0000000174', lawTitle: '労働組合法',
+      lawNum: '昭和二十四年法律第百七十四号', promulgationDate: '1949-06-01',
+      article: '1', articleCaption: '', text: '...',
+      egovUrl: 'https://laws.e-gov.go.jp/law/324AC0000000174',
+      revisionInfo: staleTag,
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '324AC0000000174', lawTitle: '労働組合法',
+      delegatedLaws: [{ lawId: '324CO0000000231', lawTitle: '労働組合法施行令' }],
+      searchKeywords: [], warnings: [],
+    } as any);
+    vi.mocked(getLawToc).mockResolvedValue({
+      lawId: '324CO0000000231', lawTitle: '労働組合法施行令', toc: '目次',
+      egovUrl: 'https://laws.e-gov.go.jp/law/324CO0000000231',
+      revisionInfo: { ...staleTag, law_revision_id: '324CO0000000231_20260624_X' },
+    } as any);
+    vi.mocked(verifyLatestEnforced).mockResolvedValue(true);
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({ results: [], warnings: [], partialFailures: [] } as any);
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({ results: [], warnings: [], failedPages: [] } as any);
+
+    const bundle = await getEvidenceBundle({ lawId: '324AC0000000174', article: '1', includeJaish: false });
+    expect(vi.mocked(verifyLatestEnforced)).toHaveBeenCalledWith('324AC0000000174', staleTag);
+    expect(vi.mocked(verifyLatestEnforced)).toHaveBeenCalledWith('324CO0000000231', expect.objectContaining({ current_revision_status: 'PreviousEnforced' }));
+    expect(bundle.warnings.some((w) => w.code === 'LAW_NOT_CURRENTLY_ENFORCED')).toBe(false);
+    expect(bundle.primary_evidence.revision_metadata?.latest_enforced_verified).toBe(true);
+    expect(bundle.delegated_evidence?.[0]?.revision_metadata?.latest_enforced_verified).toBe(true);
   });
 });

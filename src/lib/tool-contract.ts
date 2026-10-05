@@ -32,6 +32,10 @@ export const revisionMetadataSchema = z.object({
   current_revision_status: z.string().optional(),
   repeal_status: z.string().optional(),
   version_pinned_url: z.string().optional(),
+  latest_enforced_verified: z.literal(true).optional().describe(
+    'current_revision_status が PreviousEnforced でも、e-Gov /law_revisions との照合で施行済みの最新版と確認できた場合のみ true。' +
+    'e-Gov のタグ付け遅れであり、この版を現行版として扱ってよい'
+  ),
 });
 
 export const pendingAmendmentSchema = z.object({

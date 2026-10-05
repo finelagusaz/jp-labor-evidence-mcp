@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-05
+
+### Fixed
+
+- 一部の法令（2026-10-04 時点で労働組合法・厚生年金保険法）で、`get_article` / `get_evidence_bundle` が現行版に対して `LAW_NOT_CURRENTLY_ENFORCED`（「この版は過去の施行版であり、現行版ではありません。より新しい施行版が存在します」）を誤って出していた。e-Gov が施行済みの最新版に `PreviousEnforced` のタグを付けたままにしているためで、返している版そのものは正しい。`PreviousEnforced` のときだけ `/law_revisions` を取得して施行日で照合し、施行済みの中で最新と確認できた場合は警告を出さない
+  - 照合は施行日だけで行う（live 調査で、施行日と未施行→施行の切り替えは正確、タグは不正確だった）。施行日が今日（JST）以前で、ほかの施行済み版がすべてそれより前の施行日のときだけ最新とみなす
+  - 同じ施行日の別版がある・施行日が無い・照合の取得に失敗した、など曖昧なときは警告を残す。照合の失敗では `degraded` にしない
+  - 廃止系・未施行（`UnEnforced`）の警告には影響しない
+
+### Added
+
+- `revision_metadata.latest_enforced_verified`（`get_article` / `get_evidence_bundle`）: `current_revision_status` が `PreviousEnforced` でも、照合で施行済みの最新版と確認できた場合だけ `true`。`current_revision_status` は e-Gov の値をそのまま返す
+
 ## [0.7.1] - 2026-10-04
 
 ### Fixed

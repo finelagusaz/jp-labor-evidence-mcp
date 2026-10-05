@@ -42,6 +42,7 @@ export interface RevisionMetadata {
   current_revision_status?: string;
   repeal_status?: string;
   version_pinned_url?: string;
+  latest_enforced_verified?: true;
 }
 
 export interface EgovLawData {

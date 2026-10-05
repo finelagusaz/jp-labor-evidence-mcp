@@ -7,6 +7,7 @@ vi.mock('../src/lib/services/law-service.js', () => ({
   getLawToc: vi.fn(),
   resolveLaw: vi.fn(),
   getArticleByLawId: vi.fn(),
+  verifyLatestEnforced: vi.fn(),
 }));
 
 import { searchLaw, resolveLaw, getArticleByLawId, getLawArticle } from '../src/lib/services/law-service.js';
