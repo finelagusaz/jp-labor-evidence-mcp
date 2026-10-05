@@ -6,7 +6,7 @@
 import { fetchLawData, fetchLawRevisions, searchLaws, getEgovUrl } from '../egov-client.js';
 import { buildPendingAmendments, isLatestEnforcedRevision } from '../evidence-metadata.js';
 import { NormalizedCache } from '../cache.js';
-import { extractArticle, extractSupplProvision, extractToc, listSupplProvisions, normalizeSubitemPath, selectSupplProvision, type SupplProvisionInfo } from '../egov-parser.js';
+import { extractArticle, extractSupplProvision, extractToc, listSupplProvisions, normalizeArticleCaption, normalizeSubitemPath, selectSupplProvision, type SupplProvisionInfo } from '../egov-parser.js';
 import { lawNumMatches, parseLawNum, promulgationSortKey } from '../law-num.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
@@ -483,7 +483,7 @@ export async function findRelatedSources(params: {
     lawId,
     lawTitle,
     article: params.article,
-    articleCaption: params.articleCaption,
+    articleCaption: params.articleCaption !== undefined ? normalizeArticleCaption(params.articleCaption) : undefined,
   });
 
   const warnings: WarningMessage[] = delegatedLaws.length === 0

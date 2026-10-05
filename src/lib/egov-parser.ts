@@ -66,6 +66,16 @@ function normalizeSubitemLabel(input: string): string {
   return input.normalize('NFKC').replace(/[()\s]/g, '').toLowerCase();
 }
 
+/**
+ * 条見出しの外側の括弧を外す。e-Gov の ArticleCaption は「（労働時間）」と括弧つきで届くが、
+ * 表示（body の先頭で括弧を付ける）・検索キーワード・見出しの照合には括弧なしの語を使う
+ */
+export function normalizeArticleCaption(caption: string): string {
+  const trimmed = caption.trim();
+  const m = /^[（(]([^（）()]*)[）)]$/.exec(trimmed);
+  return m ? m[1].trim() : trimmed;
+}
+
 export interface ExtractResult {
   text: string;
   articleCaption: string;
@@ -113,7 +123,7 @@ function findArticleWithFallback(scope: EgovNode, articleNum: string): EgovNode 
 }
 
 function extractFromArticle(article: EgovNode, target: ExtractTarget): ExtractResult | null {
-  const articleCaption = getText(findNode(article, 'ArticleCaption'));
+  const articleCaption = normalizeArticleCaption(getText(findNode(article, 'ArticleCaption')));
   if (target.paragraph === undefined && target.item === undefined) {
     const lines: string[] = [];
     parseArticle(article, lines);

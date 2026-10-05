@@ -6,6 +6,7 @@ import {
   extractSupplProvision,
   listSupplProvisions,
   normalizeItemNum,
+  normalizeArticleCaption,
   normalizeSubitemPath,
   selectSupplProvision,
 } from '../src/lib/egov-parser.js';
@@ -186,3 +187,21 @@ describe('extractSupplProvision', () => {
     expect(suppl?.text).toContain('施行');
   });
 });
+
+describe('条見出し', () => {
+  it('e-Gov の ArticleCaption（括弧つき）から外側の括弧を外して返す', () => {
+    expect(extractArticle(roki, '32')?.articleCaption).toBe('労働時間');
+  });
+
+  it.each([
+    ['（労働時間）', '労働時間'],
+    ['(労働時間)', '労働時間'],
+    ['労働時間', '労働時間'],
+    [' （施行期日） ', '施行期日'],
+    ['（定義）（略）', '（定義）（略）'],
+    ['', ''],
+  ])('normalizeArticleCaption(%j) → %j', (input, expected) => {
+    expect(normalizeArticleCaption(input)).toBe(expected);
+  });
+});
+
