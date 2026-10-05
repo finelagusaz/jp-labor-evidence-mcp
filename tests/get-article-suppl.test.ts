@@ -130,3 +130,22 @@ describe('list_suppl_provisions', () => {
   });
 });
 
+describe('条見出しの括弧', () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('body の先頭の条見出しは括弧が 1 重', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article: '32' });
+    expect(env.data.body.startsWith('（労働時間）\n')).toBe(true);
+    expect(env.data.body).not.toContain('（（');
+  });
+
+  it('find_related_sources の検索キーワードに括弧つきの条見出しを入れない', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'find_related_sources', { law_id: '322AC0000000049', article: '32', article_caption: '（労働時間）' });
+    expect(env.data.search_keywords).toContain('労働時間');
+    expect(env.data.search_keywords).not.toContain('（労働時間）');
+  });
+});
+
