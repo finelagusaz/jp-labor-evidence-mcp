@@ -134,3 +134,19 @@ export function lawNumMatches(query: ParsedLawNum, target: ParsedLawNum): boolea
   if (query.number !== undefined && query.number !== target.number) return false;
   return true;
 }
+
+const ERA_BASE_YEAR: Record<string, number> = { 明治: 1868, 大正: 1912, 昭和: 1926, 平成: 1989, 令和: 2019 };
+
+/**
+ * 公布日の並べ替え用の数値（YYYYMMDD）。公布日の年が番号の年と食い違うときは公布日の年を使う。
+ * 公布日が無ければ undefined
+ */
+export function promulgationSortKey(parsed: ParsedLawNum): number | undefined {
+  if (parsed.month === undefined || parsed.day === undefined) return undefined;
+  const era = parsed.promulgatedEra ?? parsed.era;
+  const year = parsed.promulgatedYear ?? parsed.year;
+  const base = ERA_BASE_YEAR[era];
+  if (base === undefined) return undefined;
+  return (base + year - 1) * 10000 + parsed.month * 100 + parsed.day;
+}
+

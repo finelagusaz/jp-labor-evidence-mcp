@@ -6,7 +6,8 @@
 import { fetchLawData, fetchLawRevisions, searchLaws, getEgovUrl } from '../egov-client.js';
 import { buildPendingAmendments, isLatestEnforcedRevision } from '../evidence-metadata.js';
 import { NormalizedCache } from '../cache.js';
-import { extractArticle, extractToc } from '../egov-parser.js';
+import { extractArticle, extractSupplProvision, extractToc, listSupplProvisions, normalizeSubitemPath, selectSupplProvision, type SupplProvisionInfo } from '../egov-parser.js';
+import { lawNumMatches, parseLawNum, promulgationSortKey } from '../law-num.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
 import { indexMetadataRegistry } from '../indexes/index-metadata.js';
@@ -21,11 +22,46 @@ export interface GetLawArticleResult {
   lawTitle: string;
   lawNum: string;
   promulgationDate: string;
+  /** 附則で条を省いたときは '' */
   article: string;
   articleCaption: string;
   text: string;
   egovUrl: string;
   revisionInfo?: EgovRevisionInfo;
+  /** 指定された項、または item から特定した項 */
+  paragraph?: number;
+  /** 細分の正規形（"ロ/1/iii"） */
+  subitem?: string;
+  supplementary?: SupplementaryInfo;
+}
+
+export interface SupplementaryInfo {
+  key: string;
+  /** e-Gov の AmendLawNum（加工しない）。制定時附則は undefined */
+  amendLawNum?: string;
+  extract: boolean;
+}
+
+export interface SupplProvisionListItem {
+  key: string;
+  amendLawNum?: string;
+  extract: boolean;
+  /** 先頭 20 件まで */
+  articleNums: string[];
+  articleCount: number;
+  paragraphCount: number;
+}
+
+export interface ListSupplProvisionsResult {
+  lawId: string;
+  lawTitle: string;
+  lawNum: string;
+  promulgationDate: string;
+  egovUrl: string;
+  revisionInfo?: EgovRevisionInfo;
+  total: number;
+  hasMore: boolean;
+  items: SupplProvisionListItem[];
 }
 
 export interface GetLawTocResult {
@@ -95,18 +131,34 @@ const lawSearchNormalizedCache = new NormalizedCache<SearchLawResult>('law_searc
  */
 export async function getLawArticle(params: {
   lawName: string;
-  article: string;
+  article?: string;
   paragraph?: number;
-  item?: number;
+  item?: number | string;
+  subitem?: string;
+  supplementary?: string;
 }): Promise<GetLawArticleResult> {
   if (!params.lawName.trim()) {
     throw new ValidationError('法令名または law_id を指定してください。');
   }
-  if (!params.article.trim()) {
-    throw new ValidationError('条文番号を指定してください。');
+  const article = params.article?.trim() || undefined;
+  const supplementary = params.supplementary?.trim() || undefined;
+  if (!article && !supplementary) {
+    throw new ValidationError('条文番号を指定してください（附則なら supplementary を指定すると条文番号を省けます）。');
+  }
+  if (article && !supplementary && /^附則/.test(article)) {
+    throw new ValidationError(
+      `附則は supplementary で指定してください（例: supplementary: "制定" または改正法の法令番号、article: "1"）。附則の一覧は list_suppl_provisions で確認できます。`,
+    );
+  }
+  if (params.subitem !== undefined && params.item === undefined) {
+    throw new ValidationError('subitem を指定するときは item（号）も指定してください。');
+  }
+  const subitemPath = params.subitem !== undefined ? normalizeSubitemPath(params.subitem) : undefined;
+  if (subitemPath !== undefined && subitemPath.length === 0) {
+    throw new ValidationError(`subitem「${params.subitem}」を解釈できません。例: "イ", "イ (1)", "イ-(1)-(i)"`);
   }
 
-  const cacheKey = `${params.lawName}|${params.article}|${params.paragraph ?? ''}|${params.item ?? ''}`;
+  const cacheKey = [params.lawName, supplementary ?? '', article ?? '', params.paragraph ?? '', params.item ?? '', subitemPath?.join('/') ?? ''].join('|');
   const cached = lawArticleNormalizedCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -114,31 +166,104 @@ export async function getLawArticle(params: {
 
   const { data, lawId, lawTitle } = await fetchLawData(params.lawName);
   const egovUrl = getEgovUrl(lawId);
+  const target = { article, paragraph: params.paragraph, item: params.item, subitem: params.subitem };
 
-  const result = extractArticle(data, params.article, params.paragraph, params.item);
+  let suppl: SupplProvisionInfo | null = null;
+  if (supplementary) {
+    suppl = selectSupplProvision(data, supplementary);
+    if (!suppl) {
+      throw new NotFoundError(
+        `${lawTitle} に附則「${supplementary}」が見つかりませんでした。list_suppl_provisions で附則の一覧を確認してください。`,
+      );
+    }
+  }
+  const result = suppl
+    ? extractSupplProvision(data, suppl, target)
+    : extractArticle(data, article!, params.paragraph, params.item, params.subitem);
 
   if (!result) {
-    const articleDesc = `第${params.article}条`;
+    const supplDesc = suppl ? `附則（${suppl.key}）` : '';
+    const articleDesc = article ? `第${article}条` : '';
     const paraDesc = params.paragraph ? `第${params.paragraph}項` : '';
-    const itemDesc = params.item ? `第${params.item}号` : '';
+    const itemDesc = params.item !== undefined ? `第${params.item}号` : '';
+    const subitemDesc = params.subitem ?? '';
     throw new NotFoundError(
-      `${lawTitle} ${articleDesc}${paraDesc}${itemDesc} が見つかりませんでした。条文番号を確認してください。`
+      `${lawTitle} ${supplDesc}${articleDesc}${paraDesc}${itemDesc}${subitemDesc} が見つかりませんでした。条文番号を確認してください。`
     );
   }
 
-  const payload = {
+  const payload: GetLawArticleResult = {
     lawId,
     lawTitle,
     lawNum: data.law_info.law_num,
     promulgationDate: data.law_info.promulgation_date,
-    article: params.article,
+    article: article ?? '',
     articleCaption: result.articleCaption ?? '',
     text: result.text,
     egovUrl,
     revisionInfo: data.revision_info,
+    paragraph: params.paragraph ?? result.matchedParagraph,
+    subitem: subitemPath?.join('/'),
+    supplementary: suppl ? { key: suppl.key, amendLawNum: suppl.amendLawNum, extract: suppl.extract } : undefined,
   };
   lawArticleNormalizedCache.set(cacheKey, payload);
   return payload;
+}
+
+const SUPPL_ARTICLE_NUMS_LIMIT = 20;
+
+/**
+ * 附則の一覧を新しい順（公布日）で返す。amendmentLawNum は年だけでもよい
+ */
+export async function listSupplProvisionsByLawId(params: {
+  lawId: string;
+  amendmentLawNum?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<ListSupplProvisionsResult> {
+  if (!params.lawId.trim()) {
+    throw new ValidationError('law_id を指定してください。');
+  }
+  const filterInput = params.amendmentLawNum?.trim() || undefined;
+  const filter = filterInput ? parseLawNum(filterInput) : undefined;
+  if (filterInput && !filter) {
+    throw new ValidationError(
+      `amendment_law_num「${filterInput}」を解釈できません。例: "令和8年"、"令和8年法律第46号"、"令和八年法律第四十六号"`,
+    );
+  }
+
+  const { data, lawId, lawTitle } = await fetchLawData(params.lawId);
+  const all = listSupplProvisions(data);
+  const filtered = filter ? all.filter((s) => s.parsed && lawNumMatches(filter, s.parsed)) : all;
+  // 公布日の新しい順。公布日が無いもの（制定時附則など）は e-Gov の並び（古い順）の位置で補う
+  const sorted = [...filtered].sort((a, b) => {
+    const ka = a.parsed ? promulgationSortKey(a.parsed) : undefined;
+    const kb = b.parsed ? promulgationSortKey(b.parsed) : undefined;
+    if (ka !== undefined && kb !== undefined && ka !== kb) return kb - ka;
+    return b.index - a.index;
+  });
+  const offset = params.offset ?? 0;
+  const limit = params.limit ?? 30;
+  const page = sorted.slice(offset, offset + limit);
+
+  return {
+    lawId,
+    lawTitle,
+    lawNum: data.law_info.law_num,
+    promulgationDate: data.law_info.promulgation_date,
+    egovUrl: getEgovUrl(lawId),
+    revisionInfo: data.revision_info,
+    total: sorted.length,
+    hasMore: offset + page.length < sorted.length,
+    items: page.map((s) => ({
+      key: s.key,
+      amendLawNum: s.amendLawNum,
+      extract: s.extract,
+      articleNums: s.articleNums.slice(0, SUPPL_ARTICLE_NUMS_LIMIT),
+      articleCount: s.articleNums.length,
+      paragraphCount: s.paragraphCount,
+    })),
+  };
 }
 
 /**
@@ -322,22 +447,24 @@ export async function resolveLaw(params: {
 
 export async function getArticleByLawId(params: {
   lawId: string;
-  article: string;
+  article?: string;
   paragraph?: number;
-  item?: number;
+  item?: number | string;
+  subitem?: string;
+  supplementary?: string;
 }): Promise<GetLawArticleResult> {
   if (!params.lawId.trim()) {
     throw new ValidationError('law_id を指定してください。');
   }
 
-  const result = await getLawArticle({
+  return await getLawArticle({
     lawName: params.lawId,
     article: params.article,
     paragraph: params.paragraph,
     item: params.item,
+    subitem: params.subitem,
+    supplementary: params.supplementary,
   });
-
-  return result;
 }
 
 export async function findRelatedSources(params: {
