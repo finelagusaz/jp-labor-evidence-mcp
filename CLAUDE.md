@@ -22,7 +22,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 - `src/index.ts` — bootstrap（`initializeIndexes` → `serveStdio(() => createServer())` → `emitStartupWarnings`）。`createServer` は接続ごとに呼ばれうるので、プロセス単位の初期化は factory の外に置く。serveStdio は factory を遅延呼び出しするため、起動時に一度 `createServer()` して登録エラーを fail-fast させている
 - `src/server.ts` — `McpServer` factory、`instructions` field に LLM 向けガイダンス
-- `src/tools/*.ts` — 12 個の MCP tool（うち `get_law` は deprecated）。各 handler は envelope 構築時に warnings を merge
+- `src/tools/*.ts` — 13 個の MCP tool（うち `get_law` は deprecated）。各 handler は envelope 構築時に warnings を merge
 - `src/lib/indexes/` — egov / mhlw / jaish 内部索引（bundled vs runtime）
 - `src/lib/indexes/freshness-warnings.ts` — `getIndexWarningsForTool(sources)` ヘルパ
 - `src/lib/services/` — upstream API 呼び出しと normalize

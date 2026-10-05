@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { buildEgovArticleCanonicalId } from '../lib/canonical-id.js';
+import { buildEgovArticleCanonicalId, buildEgovSupplCanonicalId } from '../lib/canonical-id.js';
+import { normalizeItemNum } from '../lib/egov-parser.js';
 import { computeUpstreamHash, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings, getPendingAmendmentWarnings } from '../lib/evidence-metadata.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getArticleByLawId, getPendingAmendments, verifyLatestEnforced } from '../lib/services/law-service.js';
@@ -12,14 +13,21 @@ const getArticleInputSchema = z.object({
   law_id: z.string().min(1).max(20).describe(
     'resolve_law または search_law で確定した e-Gov law_id。例: "322AC0000000049"'
   ),
-  article: z.string().min(1).max(20).describe(
-    '条文番号。例: "32", "36", "32の2", "第36条"'
+  article: z.string().min(1).max(20).optional().describe(
+    '条文番号。例: "32", "36", "32の2", "第36条"。supplementary を指定したときは省略でき、省くと附則の直下（条を持たない附則の項）を対象にする'
+  ),
+  supplementary: z.string().min(1).max(60).optional().describe(
+    '附則を対象にする。"制定" で制定時附則、改正附則は改正法の法令番号で指定する（例: "令和8年法律第46号"、"令和八年法律第四十六号"）。' +
+    'revision_metadata.amendment_law_num や pending_amendments[].amendment_law_num をそのまま渡せる（未施行の改正の附則は現行版にまだ無いことがある）。一覧は list_suppl_provisions'
   ),
   paragraph: z.number().int().positive().max(99).optional().describe(
     '項番号（省略時は条文全体）。例: 1, 2'
   ),
-  item: z.number().int().positive().max(999).optional().describe(
-    '号番号（省略時は項全体）。例: 1, 2'
+  item: z.union([z.number().int().positive().max(999), z.string().min(1).max(20)]).optional().describe(
+    '号番号（省略時は項全体）。例: 1, 2, "3の2", "六"。paragraph を省くと全項から探す（複数の項にあればエラー）'
+  ),
+  subitem: z.string().min(1).max(40).optional().describe(
+    '号の下の細分。item と併せて指定する。例: "イ", "イ (1)", "イ-(1)-(i)"'
   ),
   include_pending_amendments: z.boolean().optional().describe(
     '未施行の改正（施行予定日つき）を検知して pending_amendments に載せる。別途 e-Gov /law_revisions を1回追引きするため既定 false。' +
@@ -33,9 +41,15 @@ const getArticleOutputSchema = createToolEnvelopeSchema(
     canonical_id: z.string(),
     law_id: z.string(),
     law_title: z.string(),
-    article: z.string(),
+    article: z.string().optional(),
     paragraph: z.number().optional(),
-    item: z.number().optional(),
+    item: z.union([z.number(), z.string()]).optional(),
+    subitem: z.string().optional(),
+    supplementary: z.object({
+      key: z.string(),
+      amend_law_num: z.string().optional(),
+      extract: z.boolean(),
+    }).optional(),
     title: z.string(),
     body: z.string(),
     source_url: z.string(),
@@ -51,7 +65,7 @@ export function registerGetArticleTool(server: McpServer) {
   server.registerTool(
     'get_article',
     {
-      description: '確定済み law_id に対して、特定条文を厳密に取得する。resolve_law の後段で使用する。未施行の改正確認は既定で行わない（include_pending_amendments: true 指定時のみ）。',
+      description: '確定済み law_id に対して、特定条文を厳密に取得する。resolve_law の後段で使用する。附則は supplementary で指定する（経過措置・施行期日の確認）。未施行の改正確認は既定で行わない（include_pending_amendments: true 指定時のみ）。',
       inputSchema: getArticleInputSchema,
       outputSchema: getArticleOutputSchema,
     },
@@ -63,13 +77,18 @@ export function registerGetArticleTool(server: McpServer) {
           article: args.article,
           paragraph: args.paragraph,
           item: args.item,
+          subitem: args.subitem,
+          supplementary: args.supplementary,
         });
 
-        const rawArticle = args.article.replace(/_/g, 'の');
-        const articleDisplay = /^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`;
-        const paraDisplay = args.paragraph ? `第${args.paragraph}項` : '';
-        const itemDisplay = args.item ? `第${args.item}号` : '';
-        const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
+        const itemKey = args.item !== undefined ? normalizeItemNum(args.item)?.replace(/_/g, 'の') : undefined;
+        const title = buildArticleTitle(result.lawTitle, {
+          supplementary: result.supplementary,
+          article: args.article,
+          paragraph: result.paragraph,
+          item: itemKey,
+          subitem: result.subitem,
+        });
         const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
         const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo);
         const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
@@ -109,12 +128,20 @@ export function registerGetArticleTool(server: McpServer) {
           partial_failures: partialFailures,
           data: {
             source_type: 'egov' as const,
-            canonical_id: buildEgovArticleCanonicalId(result.lawId, args.article, args.paragraph, args.item),
+            canonical_id: result.supplementary
+              ? buildEgovSupplCanonicalId(result.lawId, result.supplementary.key, args.article, result.paragraph, itemKey, result.subitem)
+              : buildEgovArticleCanonicalId(result.lawId, args.article!, result.paragraph, itemKey, result.subitem),
             law_id: result.lawId,
             law_title: result.lawTitle,
             article: args.article,
-            paragraph: args.paragraph,
+            paragraph: result.paragraph,
             item: args.item,
+            subitem: result.subitem,
+            supplementary: result.supplementary && {
+              key: result.supplementary.key,
+              amend_law_num: result.supplementary.amendLawNum,
+              extract: result.supplementary.extract,
+            },
             title,
             body,
             source_url: result.egovUrl,
@@ -144,3 +171,27 @@ export function registerGetArticleTool(server: McpServer) {
     }
   );
 }
+
+/** 「労働基準法 附則（令和8年法律第60号・抄）第1条第2項第3号イ（1）」 */
+function buildArticleTitle(
+  lawTitle: string,
+  parts: {
+    supplementary?: { key: string; extract: boolean };
+    article?: string;
+    paragraph?: number;
+    item?: string;
+    subitem?: string;
+  },
+): string {
+  const supplLabel = parts.supplementary
+    ? `附則（${parts.supplementary.key === '制定' ? '制定時' : parts.supplementary.key}${parts.supplementary.extract ? '・抄' : ''}）`
+    : '';
+  const rawArticle = parts.article?.replace(/_/g, 'の');
+  const articleDisplay = rawArticle ? (/^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`) : '';
+  const paraDisplay = parts.paragraph !== undefined ? `第${parts.paragraph}項` : '';
+  const itemDisplay = parts.item !== undefined ? `第${parts.item}号` : '';
+  const [head, ...rest] = parts.subitem?.split('/') ?? [];
+  const subitemDisplay = head !== undefined ? `${head}${rest.map((t) => `（${t}）`).join('')}` : '';
+  return `${lawTitle} ${supplLabel}${articleDisplay}${paraDisplay}${itemDisplay}${subitemDisplay}`;
+}
+

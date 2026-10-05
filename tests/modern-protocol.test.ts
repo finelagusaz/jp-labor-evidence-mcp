@@ -58,7 +58,7 @@ describe('MCP 2026-07-28 (serveStdio)', () => {
 
     const tools = await request('tools/list', { _meta: MODERN_META });
     expect(tools.error).toBeUndefined();
-    expect(tools.result.tools).toHaveLength(12);
+    expect(tools.result.tools).toHaveLength(13);
     expect(tools.result.ttlMs).toEqual(expect.any(Number));
     expect(tools.result.cacheScope).toEqual(expect.any(String));
 

@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-06
+
+### Added
+
+- **附則の取得**（経過措置・施行期日の確認）: `get_article` に `supplementary` を追加。`"制定"` で制定時附則、改正附則は改正法の法令番号で指定する。e-Gov の附則の属性（`令和八年六月二四日法律第四六号`、位取りの漢数字）と `/law_revisions` の `amendment_law_num`（`令和八年法律第四十六号`、十を使う漢数字）の両方の書き方を受け付け、正規形（`令和8年法律第46号`）にそろえる。`revision_metadata.amendment_law_num` などをそのまま渡せる
+  - 条を持たない附則（労基則では 188 件中 135 件）は `article` を省き、`paragraph` / `item` / `subitem` で直接指定できる。何も指定しなければ附則全体を返す
+  - 出力に `supplementary`（`key`・e-Gov の `amend_law_num`・抄かどうか）を追加。`canonical_id` は `egov:{law_id}:suppl:{key}[:article:…]`
+  - 該当する附則が複数あるときは、推測で選ばず候補を示して `invalid` を返す
+- 新しい tool `list_suppl_provisions`: 法令の附則を公布日の新しい順に一覧する。年や法令番号で絞り込め、`limit`（既定 30・最大 200）と `offset` でページングする。`get_article` に渡す `key` を返す
+- **号の下の細分**: `get_article` に `subitem` を追加（`"イ"`、`"イ (1)"`、`"イ-(1)-(i)"`）。3 階層までたどる
+- `get_article` の `item` を文字列でも受け付ける。枝番号の号（`"3の2"`）と漢数字（`"六"`、`"十二の五の二"`）を指定できる。`canonical_id` の号は正規形（`1の2`）にそろえる
+
+### Changed
+
+- `paragraph` を省いて `item` を指定したとき、これまでは `item` が黙って無視され条全体が返っていた。全項から号を探し、1 つに決まればその項を返す（`data.paragraph` に項番号を載せる）。複数の項にあれば項を示して `invalid` を返す。条文の取得経路を共有する tool（`get_article` / `get_evidence_bundle` / `diff_revision`、deprecated の `get_law`）すべてが同じ挙動になる。なお `get_evidence_bundle` / `diff_revision` の `canonical_id` は、特定した項をまだ含めない（後続で対応）
+
 ## [0.7.2] - 2026-10-05
 
 ### Fixed

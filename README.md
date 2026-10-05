@@ -99,7 +99,8 @@ npm run build
 | ツール                       | 用途                                              |
 |------------------------------|---------------------------------------------------|
 | `resolve_law`                | 法令名・略称・`law_id` から候補を確定する         |
-| `get_article`                | 確定済み `law_id` と条番号から条文を取得する      |
+| `get_article`                | 確定済み `law_id` と条番号から条文を取得する（附則・号の下の細分も指定可） |
+| `list_suppl_provisions`      | 法令の附則を新しい順に一覧し、`get_article` に渡す附則の key を返す |
 | `search_law`                 | 法令候補を検索する                                |
 | `find_related_sources`       | 委任先法令候補と関連通達検索キーワードを返す      |
 | `get_evidence_bundle`        | 主条文、委任先法令、関連通達候補を束ねて返す      |
@@ -141,6 +142,24 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 
 1. `resolve_law(query="安衛法")`
 2. `get_article(law_id="347AC0000000057", article="59")`
+
+### 附則（経過措置・施行期日）
+
+> 労働基準法の令和8年法律第60号による改正の附則第1条を見せて
+
+1. `resolve_law(query="労働基準法")`
+2. `list_suppl_provisions(law_id="322AC0000000049", amendment_law_num="令和8年")`（附則の key を確認する）
+3. `get_article(law_id="322AC0000000049", supplementary="令和8年法律第60号", article="1")`
+
+`supplementary` には `"制定"`（制定時附則）か改正法の法令番号を渡します。`"令和八年法律第六十号"` のような漢数字の表記も受け付けるので、`get_article` の `revision_metadata.amendment_law_num` や `pending_amendments[].amendment_law_num` をそのまま渡せます（未施行の改正の附則は、現行版の本文にまだ収録されていないことがあります）。条を持たない附則は `article` を省き、`paragraph` / `item` で指定します。
+
+### 号の下の細分
+
+> 労働基準法施行規則第7条の2第1項第2号ロ（1）を見せて
+
+`get_article(law_id="322M40000100023", article="7の2", paragraph=1, item=2, subitem="ロ (1)")`
+
+`item` は `"3の2"`（枝番号の号）や `"六"`（漢数字）でも指定できます。
 
 ### 根拠セット（条文＋委任先＋関連通達）
 
