@@ -18,7 +18,7 @@ const getArticleInputSchema = z.object({
   ),
   supplementary: z.string().min(1).max(60).optional().describe(
     '附則を対象にする。"制定" で制定時附則、改正附則は改正法の法令番号で指定する（例: "令和8年法律第46号"、"令和八年法律第四十六号"）。' +
-    'revision_metadata.amendment_law_num や pending_amendments[].amendment_law_num をそのまま渡せる。一覧は list_suppl_provisions'
+    'revision_metadata.amendment_law_num や pending_amendments[].amendment_law_num をそのまま渡せる（未施行の改正の附則は現行版にまだ無いことがある）。一覧は list_suppl_provisions'
   ),
   paragraph: z.number().int().positive().max(99).optional().describe(
     '項番号（省略時は条文全体）。例: 1, 2'

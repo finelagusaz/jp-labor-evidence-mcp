@@ -173,7 +173,8 @@ export async function getLawArticle(params: {
     suppl = selectSupplProvision(data, supplementary);
     if (!suppl) {
       throw new NotFoundError(
-        `${lawTitle} に附則「${supplementary}」が見つかりませんでした。list_suppl_provisions で附則の一覧を確認してください。`,
+        `${lawTitle} に附則「${supplementary}」が見つかりませんでした。list_suppl_provisions で附則の一覧を確認してください。` +
+          '未施行の改正の附則は、現行版の本文にまだ収録されていないことがあります。',
       );
     }
   }

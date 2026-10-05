@@ -60,7 +60,7 @@ describe('getArticleByLawId: 附則・細分・号', () => {
   it('該当する附則が無ければ NotFoundError で一覧 tool を案内する', async () => {
     const { getArticleByLawId, NotFoundError } = await loadService();
     await expect(getArticleByLawId({ lawId: '322AC0000000049', supplementary: '令和8年法律第1号' }))
-      .rejects.toSatisfy((e: unknown) => e instanceof NotFoundError && /list_suppl_provisions/.test((e as Error).message));
+      .rejects.toSatisfy((e: unknown) => e instanceof NotFoundError && /list_suppl_provisions/.test((e as Error).message) && /未施行/.test((e as Error).message));
   });
 
   it('細分の正規形と、paragraph を省いたときの項を返す', async () => {

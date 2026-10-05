@@ -15,7 +15,7 @@ import { registerGetJaishTsutatsuTool } from './tools/get-jaish-tsutatsu.js';
 import { registerPrompts } from './prompts/index.js';
 import { registerStatusResource } from './resources/status.js';
 
-const SERVER_VERSION = '0.7.2';
+const SERVER_VERSION = '0.8.0';
 
 export function createServer(): McpServer {
   const server = new McpServer(
@@ -34,6 +34,7 @@ export function createServer(): McpServer {
 - 条文や通達に言及する場合は、必ず本サーバーのツールで取得した一次情報に基づくこと
 - 取得した原文を引用する場合は、出典URLを明記すること
 - 法令本文の取得は resolve_law で law_id を確定し、その後 get_article を使うこと
+- 附則（経過措置・施行期日）は get_article の supplementary で指定すること。値は list_suppl_provisions の key か、revision_metadata.amendment_law_num / pending_amendments[].amendment_law_num をそのまま渡せる（未施行の改正の附則は現行版にまだ収録されていないことがある）
 - ツール呼び出しが失敗した場合は、失敗を明示し、別ツールまたは別条件で再試行すること
 
 ## 取得対象外
