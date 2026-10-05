@@ -1,7 +1,7 @@
 # e-Gov 附則・号の下の細分（subitem）・号の番号の拡張 — 設計仕様
 
 - 日付: 2026-10-05
-- ステータス: **brainstorming 確定（user review 待ち）**
+- ステータス: **実装済み（0.8.0）**
 - 発端: upstream `kentaroajisaka/labor-law-mcp` 37e67f8「号の下のサブアイテムと附則に対応」（2026-09-14）。そのまま移植せず、こちらの tool 構成（`resolve_law` → `get_article` の段階分け）と出力の契約に合わせて設計し直す
 - 関連: [2026-07-13-egov-pending-amendments-design.md](2026-07-13-egov-pending-amendments-design.md)（`pending_amendments[].amendment_law_num` と附則をつなぐ）
 
@@ -20,7 +20,7 @@
 - `paragraph` を省いた `item` の扱いを直す（§5.3）
 
 **非目標**:
-- `get_evidence_bundle` への附則・subitem の統合（後続）
+- `get_evidence_bundle` への附則・subitem の統合（後続）。あわせて、`get_evidence_bundle` / `diff_revision` の `canonical_id`・`article_locator` は入力の `paragraph` から組んでおり、§5.3 で特定した項を含めない（`get_article` は含める）。この差も後続で揃える
 - deprecated の `get_law` の拡張（新機能は足さない）。ただし parser を共有しているため、§5.3 の「`paragraph` を省いた `item`」の修正は `get_law` にも及ぶ（いまは条全体を黙って返す → 項を特定して返すか、曖昧ならエラー）。挙動の変更として CHANGELOG `### Changed` に書く
 - 附則と `/law_revisions` の施行日の突き合わせ（一覧に施行日を出すには追加の request が要る。後続）
 - 改正法そのもの（附則の全文を持つ側）の取得
