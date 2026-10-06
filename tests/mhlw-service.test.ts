@@ -14,12 +14,15 @@ vi.mock('../src/lib/mhlw-client.js', () => ({
 
 import { fetchMhlwSearch } from '../src/lib/mhlw-client.js';
 import { searchMhlwTsutatsu } from '../src/lib/services/mhlw-tsutatsu-service.js';
+import { useTempIndexDir } from './test-helpers/temp-index-dir.js';
 
 function readFixture(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf-8');
 }
 
 describe('mhlw-tsutatsu-service fixtures', () => {
+  useTempIndexDir();
+
   const successHtml = readFixture('tests/fixtures/mhlw/search-success.html');
 
   beforeEach(() => {

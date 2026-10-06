@@ -13,12 +13,15 @@ import { searchMhlwTsutatsu } from '../src/lib/services/mhlw-tsutatsu-service.js
 import { searchJaishTsutatsu } from '../src/lib/services/jaish-tsutatsu-service.js';
 import { registerSearchMhlwTsutatsuTool } from '../src/tools/search-mhlw-tsutatsu.js';
 import { registerSearchJaishTsutatsuTool } from '../src/tools/search-jaish-tsutatsu.js';
+import { useTempIndexDir } from './test-helpers/temp-index-dir.js';
 
 function createServerStub(registerTool: ReturnType<typeof vi.fn>): McpServer {
   return { registerTool } as unknown as McpServer;
 }
 
 describe('search tool regression', () => {
+  useTempIndexDir();
+
   beforeEach(() => {
     vi.resetAllMocks();
   });

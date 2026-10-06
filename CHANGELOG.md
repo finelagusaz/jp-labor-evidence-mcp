@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-06
+
+### Fixed
+
+- 通達検索（厚労省・JAISH）で、検索結果を手元の索引へ反映できないと、取得できていた検索結果ごと失われていた。`search_mhlw_tsutatsu` / `search_jaish_tsutatsu` は `unavailable`（`error_code: internal_error`、結果 0 件）を返し、`get_evidence_bundle` は関連通達を落として `partial`（`reason: IndexPromotionError`）になっていた。反映に失敗しても検索結果は返し、失敗は stderr に記録する
+- 上の反映の失敗は、複数のプロセス（Claude Desktop と Claude Code など）が同じ索引ファイルを共有するときに起きていた。起動後に他のプロセスが学習して索引が大きくなると、自分のメモリ上の少ない件数で上書きしようとして「件数が大きく減った」とみなされ、反映を拒まれる（`ENTRY_COUNT_DROP_TOO_LARGE`）。検索のたびの反映の前にディスクの索引を取り込むようにし、他のプロセスの学習分も消さない。保守用の同期スクリプト（`sync:indexes`）の反映は従来どおり失敗を例外で知らせる
+
 ## [0.9.0] - 2026-10-06
 
 ### Added
