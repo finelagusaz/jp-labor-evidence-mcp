@@ -1,7 +1,7 @@
 # e-Gov 附則・号の下の細分（subitem）・号の番号の拡張 — 設計仕様
 
 - 日付: 2026-10-05
-- ステータス: **実装済み（0.8.0）**
+- ステータス: **実装済み（0.8.0、§10 は 0.9.0）**
 - 発端: upstream `kentaroajisaka/labor-law-mcp` 37e67f8「号の下のサブアイテムと附則に対応」（2026-09-14）。そのまま移植せず、こちらの tool 構成（`resolve_law` → `get_article` の段階分け）と出力の契約に合わせて設計し直す
 - 関連: [2026-07-13-egov-pending-amendments-design.md](2026-07-13-egov-pending-amendments-design.md)（`pending_amendments[].amendment_law_num` と附則をつなぐ）
 
