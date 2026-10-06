@@ -1,7 +1,7 @@
 # e-Gov 附則・号の下の細分（subitem）・号の番号の拡張 — 設計仕様
 
 - 日付: 2026-10-05
-- ステータス: **実装済み（0.8.0）**
+- ステータス: **実装済み（0.8.0、§10 は 0.9.0）**
 - 発端: upstream `kentaroajisaka/labor-law-mcp` 37e67f8「号の下のサブアイテムと附則に対応」（2026-09-14）。そのまま移植せず、こちらの tool 構成（`resolve_law` → `get_article` の段階分け）と出力の契約に合わせて設計し直す
 - 関連: [2026-07-13-egov-pending-amendments-design.md](2026-07-13-egov-pending-amendments-design.md)（`pending_amendments[].amendment_law_num` と附則をつなぐ）
 
@@ -153,3 +153,26 @@ suppl key は出力（一覧・`get_article`・`canonical_id`）で使い、入�
 ## 9. リリース
 
 新しい tool と入力の追加なので **minor（0.8.0）**。spec の承認後、`docs/superpowers/plans/` に TDD の task 単位の実装計画を書いてから実装する（parser の共有部分を作り替えるため、順序が効く）。
+
+## 10. 追補: `get_evidence_bundle` への統合と canonical_id の揃え（0.9.0 で実装、2026-10-06）
+
+### 一次証拠（live の厚労省通達検索）
+
+| 検索キーワード | 結果 |
+|---|---|
+| `平成30年法律第71号` / `平成三十年法律第七十一号`（改正法の法令番号） | `unavailable`（0 件） |
+| `働き方改革を推進するための関係法律の整備に関する法律`（改正法の題名） | 14 件。上位はいずれも施行通達 |
+| `施行期日` / `経過措置`（附則の典型的な条見出し） | 2,777 件 / 2,490 件。上位は無関係 |
+
+### 決定
+
+| 論点 | 決定 | 理由 |
+|---|---|---|
+| bundle の入力 | `get_article` と同じ `supplementary` / `subitem` / 文字列の `item` を受ける。`article` は `supplementary` があれば省ける | 主条文の取得経路は `getArticleByLawId` を共有している |
+| 附則のときの検索キーワード | 条番号由来のキーワード（`労働基準法 第1条`）・条番号ごとの実務キーワード・条見出しを使わない。改正附則なら `/law_revisions` の `amendment_law_title`（改正法の題名）を先頭に置く。制定時附則は法令名のみ | 条番号由来のキーワードは本則の同じ番号の条を指してしまう。附則の条見出しはほとんどが決まり文句で雑音になる。改正法の題名は施行通達に直結する |
+| 改正法の題名の取得 | 附則の key と `amendment_law_num` を `law-num` の正規形で照合する。取得に失敗したら `partial_failures` に記録して続ける。一覧に無ければキーワードを足さないだけ | bundle の他の関連取得と同じ扱い |
+| 本文由来のキーワード | `施行期日`・`経過措置` を除外語に加える | 附則の本文は `#### （施行期日）` で始まり、そのまま拾われるため |
+| `title` / `canonical_id` | `get_article` と同じ組み立て（`src/lib/article-locator.ts` に共有）。特定した項・号の正規形・細分を含める | 同じ条文に同じ識別子を付ける |
+| `article_locator` | `article` を optional に、`item` を `number \| string` に、`subitem`・`supplementary`（key）を追加。`paragraph` は特定した項 | 機械可読の位置情報も `canonical_id` と一致させる |
+| `diff_revision` | `canonical_id`・`paragraph` に特定した項を含める。改正前後で特定した項が食い違ったら警告 `DIFF_PARAGRAPH_MISMATCH` | `paragraph` を省いた号は、改正で別の項へ移ると前後で別の項に解決され、異なる項を黙って比べてしまう |
+

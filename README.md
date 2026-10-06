@@ -151,7 +151,7 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 2. `list_suppl_provisions(law_id="322AC0000000049", amendment_law_num="令和8年")`（附則の key を確認する）
 3. `get_article(law_id="322AC0000000049", supplementary="令和8年法律第60号", article="1")`
 
-`supplementary` には `"制定"`（制定時附則）か改正法の法令番号を渡します。`"令和八年法律第六十号"` のような漢数字の表記も受け付けるので、`get_article` の `revision_metadata.amendment_law_num` や `pending_amendments[].amendment_law_num` をそのまま渡せます（未施行の改正の附則は、現行版の本文にまだ収録されていないことがあります）。条を持たない附則は `article` を省き、`paragraph` / `item` で指定します。
+`supplementary` には `"制定"`（制定時附則）か改正法の法令番号を渡します。`"令和八年法律第六十号"` のような漢数字の表記も受け付けるので、`get_article` の `revision_metadata.amendment_law_num` や `pending_amendments[].amendment_law_num` をそのまま渡せます（未施行の改正の附則は、現行版の本文にまだ収録されていないことがあります）。条を持たない附則は `article` を省き、`paragraph` / `item` で指定します。`get_evidence_bundle` にも同じく `supplementary` を渡せ、改正附則では改正法の題名で関連通達（施行通達など）を探します。
 
 ### 号の下の細分
 

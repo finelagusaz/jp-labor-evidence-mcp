@@ -6,6 +6,7 @@ vi.mock('../src/lib/services/law-service.js', () => ({
   getLawToc: vi.fn(),
   findRelatedSources: vi.fn(),
   verifyLatestEnforced: vi.fn().mockResolvedValue(false),
+  findAmendmentLawTitle: vi.fn(),
 }));
 
 vi.mock('../src/lib/services/mhlw-tsutatsu-service.js', () => ({
@@ -16,7 +17,7 @@ vi.mock('../src/lib/services/jaish-tsutatsu-service.js', () => ({
   searchJaishTsutatsu: vi.fn(),
 }));
 
-import { findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from '../src/lib/services/law-service.js';
+import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from '../src/lib/services/law-service.js';
 import { searchMhlwTsutatsu } from '../src/lib/services/mhlw-tsutatsu-service.js';
 import { searchJaishTsutatsu } from '../src/lib/services/jaish-tsutatsu-service.js';
 import { getEvidenceBundle } from '../src/lib/services/evidence-bundle-service.js';
@@ -500,4 +501,90 @@ describe('getEvidenceBundle', () => {
     expect(bundle.primary_evidence.revision_metadata?.latest_enforced_verified).toBe(true);
     expect(bundle.delegated_evidence?.[0]?.revision_metadata?.latest_enforced_verified).toBe(true);
   });
+
+  describe('附則・号・細分', () => {
+    const supplPrimary = {
+      lawId: '322AC0000000049', lawTitle: '労働基準法',
+      lawNum: '昭和二十二年法律第四十九号', promulgationDate: '1947-04-07',
+      article: '1', articleCaption: '施行期日', captionInText: true,
+      text: '#### （施行期日）\n**第一条**\n\nこの法律は、令和九年四月一日から施行する。',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+      supplementary: { key: '令和8年法律第60号', amendLawNum: '令和八年七月一七日法律第六〇号', extract: true },
+    };
+    const stubRelated = () => {
+      vi.mocked(findRelatedSources).mockResolvedValue({
+        lawId: '322AC0000000049', lawTitle: '労働基準法', delegatedLaws: [], searchKeywords: ['労基法', '労働基準法'], warnings: [],
+      });
+      vi.mocked(searchMhlwTsutatsu).mockResolvedValue({ results: [], warnings: [], partialFailures: [] } as any);
+    };
+
+    it('改正附則: 条番号・条見出しを検索に使わず、改正法の題名を先頭のキーワードにする', async () => {
+      vi.mocked(getArticleByLawId).mockResolvedValue(supplPrimary as any);
+      vi.mocked(findAmendmentLawTitle).mockResolvedValue('労働基準法等の一部を改正する法律');
+      stubRelated();
+
+      const bundle = await getEvidenceBundle({ lawId: '322AC0000000049', supplementary: '令和八年法律第六十号', article: '1', includeJaish: false });
+
+      expect(vi.mocked(getArticleByLawId)).toHaveBeenCalledWith(expect.objectContaining({ supplementary: '令和八年法律第六十号', article: '1' }));
+      expect(vi.mocked(findRelatedSources)).toHaveBeenCalledWith({ lawId: '322AC0000000049', article: undefined, articleCaption: undefined });
+      expect(vi.mocked(findAmendmentLawTitle)).toHaveBeenCalledWith('322AC0000000049', '令和8年法律第60号');
+      expect(bundle.search_keywords[0]).toBe('労働基準法等の一部を改正する法律');
+      expect(bundle.search_keywords).not.toContain('施行期日');
+      expect(bundle.primary_evidence.title).toBe('労働基準法 附則（令和8年法律第60号・抄）第1条');
+      expect(bundle.primary_evidence.canonical_id).toBe('egov:322AC0000000049:suppl:令和8年法律第60号:article:1');
+      expect(bundle.primary_evidence.article_locator).toEqual({ law_id: '322AC0000000049', supplementary: '令和8年法律第60号', article: '1' });
+      expect(bundle.primary_evidence.body?.startsWith('#### （施行期日）')).toBe(true);
+    });
+
+    it('制定時附則: 改正法の題名は引かず、本文の「施行期日」もキーワードにしない', async () => {
+      vi.mocked(getArticleByLawId).mockResolvedValue({ ...supplPrimary, supplementary: { key: '制定', extract: true } } as any);
+      vi.mocked(findRelatedSources).mockResolvedValue({
+        lawId: '322AC0000000049', lawTitle: '労働基準法', delegatedLaws: [], searchKeywords: [], warnings: [],
+      });
+      vi.mocked(searchMhlwTsutatsu).mockResolvedValue({ results: [], warnings: [], partialFailures: [] } as any);
+
+      const bundle = await getEvidenceBundle({ lawId: '322AC0000000049', supplementary: '制定', article: '1', includeJaish: false });
+
+      expect(vi.mocked(findAmendmentLawTitle)).not.toHaveBeenCalled();
+      expect(bundle.search_keywords).not.toContain('施行期日');
+      // 本文の条名の行（**第一条**）は本則の同じ番号の条を指してしまうので拾わない
+      expect(bundle.search_keywords.some((k) => /^第.+条$/.test(k))).toBe(false);
+    });
+
+    it('改正法の題名の取得に失敗したら partial_failures に記録して続ける', async () => {
+      vi.mocked(getArticleByLawId).mockResolvedValue(supplPrimary as any);
+      vi.mocked(findAmendmentLawTitle).mockRejectedValue(new ExternalApiError('law_revisions HTTP 503'));
+      stubRelated();
+
+      const bundle = await getEvidenceBundle({ lawId: '322AC0000000049', supplementary: '令和8年法律第60号', article: '1', includeJaish: false });
+
+      expect(bundle.status).toBe('partial');
+      expect(bundle.partial_failures.some((f) => f.target === 'law_revisions:322AC0000000049')).toBe(true);
+      expect(bundle.primary_evidence.canonical_id).toBe('egov:322AC0000000049:suppl:令和8年法律第60号:article:1');
+    });
+
+    it('paragraph を省いた号: canonical_id と article_locator に特定した項を含め、号は正規形', async () => {
+      vi.mocked(getArticleByLawId).mockResolvedValue({
+        lawId: '322M40000100023', lawTitle: '労働基準法施行規則',
+        lawNum: '昭和二十二年厚生省令第二十三号', promulgationDate: '1947-08-30',
+        article: '7の2', articleCaption: '', captionInText: false, text: '（ｉｉｉ） …',
+        egovUrl: 'https://laws.e-gov.go.jp/law/322M40000100023',
+        paragraph: 1, subitem: 'ロ/1/iii',
+      } as any);
+      vi.mocked(findRelatedSources).mockResolvedValue({
+        lawId: '322M40000100023', lawTitle: '労働基準法施行規則', delegatedLaws: [], searchKeywords: [], warnings: [],
+      });
+      vi.mocked(searchMhlwTsutatsu).mockResolvedValue({ results: [], warnings: [], partialFailures: [] } as any);
+
+      const bundle = await getEvidenceBundle({ lawId: '322M40000100023', article: '7の2', item: '二', subitem: 'ロ (1) (iii)', includeJaish: false });
+
+      expect(bundle.primary_evidence.canonical_id).toBe('egov:322M40000100023:article:7の2:paragraph:1:item:2:subitem:ロ/1/iii');
+      expect(bundle.primary_evidence.title).toBe('労働基準法施行規則 第7の2条第1項第2号ロ（1）（iii）');
+      expect(bundle.primary_evidence.article_locator).toEqual({
+        law_id: '322M40000100023', article: '7の2', paragraph: 1, item: '二', subitem: 'ロ/1/iii',
+      });
+      expect(vi.mocked(findRelatedSources)).toHaveBeenCalledWith(expect.objectContaining({ article: '7の2' }));
+    });
+  });
 });
+

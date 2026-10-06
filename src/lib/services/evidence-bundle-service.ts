@@ -1,9 +1,10 @@
-import { buildEgovArticleCanonicalId, buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
+import { buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
+import { buildArticleCanonicalId, buildArticleTitle, type ArticleLocatorParts } from '../article-locator.js';
 import { formatArticleBody } from '../egov-parser.js';
 import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
 import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
 import { ExternalApiError, ParseError } from '../errors.js';
-import { findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from './law-service.js';
+import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from './law-service.js';
 import { searchJaishTsutatsu } from './jaish-tsutatsu-service.js';
 import { searchMhlwTsutatsu } from './mhlw-tsutatsu-service.js';
 
@@ -20,9 +21,12 @@ export interface EvidenceRecord {
   upstream_hash: string;
   article_locator?: {
     law_id: string;
-    article: string;
+    /** 附則の key（附則のときだけ） */
+    supplementary?: string;
+    article?: string;
     paragraph?: number;
-    item?: number;
+    item?: number | string;
+    subitem?: string;
   };
   date?: string;
   number?: string;
@@ -50,9 +54,11 @@ export interface EvidenceBundleResult {
 
 export async function getEvidenceBundle(params: {
   lawId: string;
-  article: string;
+  article?: string;
   paragraph?: number;
-  item?: number;
+  item?: number | string;
+  subitem?: string;
+  supplementary?: string;
   relatedKeywords?: string[];
   includeJaish?: boolean;
   mhlwLimit?: number;
@@ -64,14 +70,23 @@ export async function getEvidenceBundle(params: {
     article: params.article,
     paragraph: params.paragraph,
     item: params.item,
+    subitem: params.subitem,
+    supplementary: params.supplementary,
   });
   const retrievedAt = new Date().toISOString();
   const primaryLatestEnforcedVerified = await verifyLatestEnforced(primary.lawId, primary.revisionInfo);
-  const primaryTitle = buildPrimaryTitle(primary.lawTitle, params.article, params.paragraph, params.item);
+  const locator: ArticleLocatorParts = {
+    supplementary: primary.supplementary,
+    article: params.article,
+    paragraph: primary.paragraph,
+    item: params.item,
+    subitem: primary.subitem,
+  };
+  const primaryTitle = buildArticleTitle(primary.lawTitle, locator);
   const primaryBody = formatArticleBody(primary);
   const primaryEvidence: EvidenceRecord = {
     source_type: 'egov',
-    canonical_id: buildEgovArticleCanonicalId(primary.lawId, params.article, params.paragraph, params.item),
+    canonical_id: buildArticleCanonicalId(primary.lawId, locator),
     title: primaryTitle,
     body: primaryBody,
     source_url: primary.egovUrl,
@@ -84,9 +99,11 @@ export async function getEvidenceBundle(params: {
     upstream_hash: computeUpstreamHash([primary.lawId, primaryTitle, primaryBody, primary.egovUrl]),
     article_locator: {
       law_id: primary.lawId,
+      supplementary: primary.supplementary?.key,
       article: params.article,
-      paragraph: params.paragraph,
+      paragraph: primary.paragraph,
       item: params.item,
+      subitem: primary.subitem,
     },
   };
 
@@ -94,18 +111,37 @@ export async function getEvidenceBundle(params: {
     latestEnforcedVerified: primaryLatestEnforcedVerified,
   });
 
+  // 附則では条番号由来のキーワード（本則の同じ番号の条を指してしまう）と、
+  // 決まり文句の多い条見出し（施行期日・経過措置）を検索に使わない
+  const suppl = primary.supplementary;
   const related = await findRelatedSources({
     lawId: primary.lawId,
-    article: params.article,
-    articleCaption: primary.articleCaption,
+    article: suppl ? undefined : params.article,
+    articleCaption: suppl ? undefined : primary.articleCaption,
   });
+  const warnings: WarningMessage[] = [...primaryRevisionWarnings, ...related.warnings];
+  const partialFailures: PartialFailure[] = [];
+
+  // 改正附則は改正法の題名で施行通達を探す（法令番号では厚労省の検索が当たらない）
+  const amendmentKeywords: string[] = [];
+  if (suppl && suppl.key !== '制定') {
+    try {
+      const title = await findAmendmentLawTitle(primary.lawId, suppl.key);
+      if (title) amendmentKeywords.push(title);
+    } catch (error) {
+      const failure = mapRelatedSourceFailure('egov', `law_revisions:${primary.lawId}`, error);
+      warnings.push(failure.warning);
+      partialFailures.push(failure.partialFailure);
+    }
+  }
   const inferredKeywords = [
+    ...amendmentKeywords,
     ...related.searchKeywords,
     ...extractKeywordCandidates(primaryBody),
   ];
   const keywords = normalizeKeywords(params.relatedKeywords, inferredKeywords);
-  const warnings: WarningMessage[] = [...primaryRevisionWarnings, ...related.warnings];
-  const partialFailures: PartialFailure[] = [];
+  const scoringArticle = suppl ? undefined : params.article;
+  const scoringCaption = suppl ? undefined : primary.articleCaption;
   const delegatedEvidence: EvidenceRecord[] = [];
   const relatedTsutatsu: EvidenceRecord[] = [];
 
@@ -153,8 +189,8 @@ export async function getEvidenceBundle(params: {
             number: result.shubetsu,
             scoringText: `${result.title} ${result.shubetsu} ${result.date}`,
             lawTitle: primary.lawTitle,
-            article: params.article,
-            articleCaption: primary.articleCaption,
+            article: scoringArticle,
+            articleCaption: scoringCaption,
             keywords,
           })
         )
@@ -189,8 +225,8 @@ export async function getEvidenceBundle(params: {
               number: result.number,
               scoringText: `${result.title} ${result.number} ${result.date}`,
               lawTitle: primary.lawTitle,
-              article: params.article,
-              articleCaption: primary.articleCaption,
+              article: scoringArticle,
+              articleCaption: scoringCaption,
               keywords,
             })
           )
@@ -247,14 +283,6 @@ function mapRelatedSourceFailure(
   };
 }
 
-function buildPrimaryTitle(lawTitle: string, article: string, paragraph?: number, item?: number): string {
-  const rawArticle = article.replace(/_/g, 'の');
-  const articleDisplay = /^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`;
-  const paraDisplay = paragraph ? `第${paragraph}項` : '';
-  const itemDisplay = item ? `第${item}号` : '';
-  return `${lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
-}
-
 function normalizeKeywords(explicitKeywords: string[] | undefined, inferredKeywords: string[]): string[] {
   const seed = explicitKeywords && explicitKeywords.length > 0
     ? explicitKeywords
@@ -269,11 +297,17 @@ function extractKeywordCandidates(text: string): string[] {
   const stopwords = new Set([
     '労働者', '使用者', '事業者', '場合', '事項', '政令', '厚生労働省令',
     '命令', '必要', '定める', '行う', '関する', '及び', '又は', 'その他',
+    // 附則の決まり文句（条見出しが本文の見出し行から拾われる）
+    '施行期日', '経過措置',
   ]);
 
   const keywords: string[] = [];
   for (const match of rawMatches) {
     if (stopwords.has(match)) {
+      continue;
+    }
+    // 条名の行（「第百二十二条」）は本則の同じ番号の条への言及と取り違えるので拾わない
+    if (/^第[一二三四五六七八九十百千〇]+条/.test(match)) {
       continue;
     }
     if (keywords.includes(match)) {
@@ -336,7 +370,8 @@ function buildRelatedTsutatsuCandidate(params: {
   number?: string;
   scoringText: string;
   lawTitle: string;
-  article: string;
+  /** 附則のときは渡さない（本則の同じ番号の条への言及と取り違えるため） */
+  article?: string;
   articleCaption?: string;
   keywords: string[];
 }): EvidenceRecord {
@@ -375,12 +410,13 @@ function collectMatchSignals(params: {
   scoringText: string;
   sourceType: 'mhlw' | 'jaish';
   lawTitle: string;
-  article: string;
+  /** 附則のときは渡さない（本則の同じ番号の条への言及と取り違えるため） */
+  article?: string;
   articleCaption?: string;
   keywords: string[];
 }): MatchSignal[] {
   const signals: MatchSignal[] = [];
-  const articleRefs = buildArticleReferenceCandidates(params.article);
+  const articleRefs = params.article ? buildArticleReferenceCandidates(params.article) : [];
 
   signals.push({
     type: 'source_priority',

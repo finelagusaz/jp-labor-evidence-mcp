@@ -8,11 +8,19 @@ const inputSchema = z.object({
   law_id: z.string().min(1).max(20).describe(
     '確定済みの e-Gov law_id。resolve_law または search_law の結果を指定。'
   ),
-  article: z.string().min(1).max(20).describe(
-    '条文番号。例: "32", "36", "32の2", "第36条"'
+  article: z.string().min(1).max(20).optional().describe(
+    '条文番号。例: "32", "36", "32の2", "第36条"。supplementary を指定したときは省略できる'
+  ),
+  supplementary: z.string().min(1).max(60).optional().describe(
+    '附則を主根拠にする。"制定" または改正法の法令番号（get_article と同じ）。改正附則では改正法の題名で関連通達（施行通達など）を探す'
   ),
   paragraph: z.number().int().positive().max(99).optional(),
-  item: z.number().int().positive().max(999).optional(),
+  item: z.union([z.number().int().positive().max(999), z.string().min(1).max(20)]).optional().describe(
+    '号番号。例: 1, "3の2", "六"'
+  ),
+  subitem: z.string().min(1).max(40).optional().describe(
+    '号の下の細分（item と併せて指定）。例: "イ", "イ (1)"'
+  ),
   related_keywords: z.array(z.string().min(1).max(100)).max(3).optional().describe(
     '関連通達検索に使う明示キーワード。省略時は条見出しや法令名から保守的に生成。'
   ),
@@ -40,9 +48,11 @@ const evidenceSchema = z.object({
   upstream_hash: z.string(),
   article_locator: z.object({
     law_id: z.string(),
-    article: z.string(),
+    supplementary: z.string().optional(),
+    article: z.string().optional(),
     paragraph: z.number().optional(),
-    item: z.number().optional(),
+    item: z.union([z.number(), z.string()]).optional(),
+    subitem: z.string().optional(),
   }).optional(),
   date: z.string().optional(),
   number: z.string().optional(),
@@ -78,7 +88,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
   server.registerTool(
     'get_evidence_bundle',
     {
-      description: '確定済み条文を主根拠として、関連通達候補を束ねた evidence bundle を返す。',
+      description: '確定済み条文を主根拠として、関連通達候補を束ねた evidence bundle を返す。附則（経過措置・施行期日）も supplementary で主根拠にできる。',
       inputSchema,
       outputSchema,
     },
@@ -91,6 +101,8 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
           article: args.article,
           paragraph: args.paragraph,
           item: args.item,
+          subitem: args.subitem,
+          supplementary: args.supplementary,
           relatedKeywords: args.related_keywords,
           includeJaish: args.include_jaish,
           mhlwLimit: args.mhlw_limit,

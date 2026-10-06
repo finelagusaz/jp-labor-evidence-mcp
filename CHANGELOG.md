@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-06
+
+### Added
+
+- `get_evidence_bundle` で附則を主根拠にできる。`get_article` と同じ `supplementary` / `subitem` / 文字列の `item` を受け付け、`article` は `supplementary` があれば省ける
+  - 改正附則では、`/law_revisions` から引いた**改正法の題名**を先頭の検索キーワードにして関連通達を探す（厚労省の通達検索は法令番号では当たらず、題名では施行通達が上位に来ることを live で確かめた）。題名の取得に失敗したら `partial_failures` に記録して続ける
+  - 附則では、条番号由来のキーワード（`労働基準法 第1条`）・条番号ごとの実務キーワード・条見出しを検索と順位づけに使わない。本則の同じ番号の条を指してしまうため
+  - `article_locator` に `supplementary`（附則の key）と `subitem` を追加し、`item` を文字列でも返す
+
+### Changed
+
+- `get_evidence_bundle` / `diff_revision` の `title`・`canonical_id`・`paragraph`（bundle は `article_locator.paragraph`）に、`paragraph` を省いた号から特定した項を含める。`get_article` と同じ識別子になる（`diff_revision` の入力は従来どおり数値の `item` のみで、附則・細分は受け付けない）
+- `diff_revision`: `paragraph` を省いた号が改正前後で別の項に解決されたら、警告 `DIFF_PARAGRAPH_MISMATCH` を出す（号が改正で別の項へ移った場合に、異なる項どうしを黙って比べないため）
+- 関連通達の検索キーワードを本文から作るとき、`施行期日`・`経過措置` と条名（`第百二十二条` など）を除く
+
 ## [0.8.2] - 2026-10-06
 
 ### Changed
