@@ -6,6 +6,7 @@ import {
   extractSupplProvision,
   listSupplProvisions,
   normalizeItemNum,
+  formatArticleBody,
   normalizeArticleCaption,
   normalizeSubitemPath,
   selectSupplProvision,
@@ -193,12 +194,33 @@ describe('条見出し', () => {
     expect(extractArticle(roki, '32')?.articleCaption).toBe('労働時間');
   });
 
+  it('条全体のときだけ本文に条見出しの行が入る（captionInText）', () => {
+    const whole = extractArticle(roki, '32')!;
+    expect(whole.captionInText).toBe(true);
+    expect(whole.text).toContain('#### （労働時間）');
+    const para = extractArticle(roki, '32', 1)!;
+    expect(para.captionInText).toBe(false);
+    expect(para.text).not.toContain('労働時間）');
+  });
+
+  it('formatArticleBody: 条全体なら本文のまま、項以下なら先頭に条見出しを 1 行足す', () => {
+    expect(formatArticleBody({ articleCaption: '労働時間', text: '#### （労働時間）\n本文', captionInText: true })).toBe('#### （労働時間）\n本文');
+    expect(formatArticleBody({ articleCaption: '労働時間', text: '本文', captionInText: false })).toBe('（労働時間）\n本文');
+    expect(formatArticleBody({ articleCaption: '', text: '本文', captionInText: false })).toBe('本文');
+    // captionInText を持たない（古い形の）結果は先頭に足す側に倒す
+    expect(formatArticleBody({ articleCaption: '労働時間', text: '本文' })).toBe('（労働時間）\n本文');
+  });
+
   it.each([
     ['（労働時間）', '労働時間'],
     ['(労働時間)', '労働時間'],
     ['労働時間', '労働時間'],
     [' （施行期日） ', '施行期日'],
     ['（定義）（略）', '（定義）（略）'],
+    // 安衛則 第3条（live）: 見出しの中にさらに括弧がある
+    ['（車両系建設機械（整地・運搬・積込み用及び掘削用）運転技能講習に関する経過措置）', '車両系建設機械（整地・運搬・積込み用及び掘削用）運転技能講習に関する経過措置'],
+    ['（a）b（c）', '（a）b（c）'],
+    ['（未閉じ', '（未閉じ'],
     ['', ''],
   ])('normalizeArticleCaption(%j) → %j', (input, expected) => {
     expect(normalizeArticleCaption(input)).toBe(expected);

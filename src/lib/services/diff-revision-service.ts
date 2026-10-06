@@ -3,6 +3,7 @@ import { computeUpstreamHash, joinVersionInfo } from '../evidence-metadata.js';
 import { ValidationError } from '../errors.js';
 import type { WarningMessage } from '../types.js';
 import { getArticleByLawId } from './law-service.js';
+import { formatArticleBody } from '../egov-parser.js';
 
 export interface DiffEvidenceRecord {
   source_type: 'egov';
@@ -103,7 +104,7 @@ function buildDiffEvidenceRecord(
   const paraDisplay = paragraph ? `第${paragraph}項` : '';
   const itemDisplay = item ? `第${item}号` : '';
   const title = `${article.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
-  const body = `${article.articleCaption ? `（${article.articleCaption}）\n` : ''}${article.text}`;
+  const body = formatArticleBody(article);
 
   return {
     source_type: 'egov',

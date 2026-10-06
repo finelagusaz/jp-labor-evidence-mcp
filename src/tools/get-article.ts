@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { buildEgovArticleCanonicalId, buildEgovSupplCanonicalId } from '../lib/canonical-id.js';
-import { normalizeItemNum } from '../lib/egov-parser.js';
+import { formatArticleBody, normalizeItemNum } from '../lib/egov-parser.js';
 import { computeUpstreamHash, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings, getPendingAmendmentWarnings } from '../lib/evidence-metadata.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getArticleByLawId, getPendingAmendments, verifyLatestEnforced } from '../lib/services/law-service.js';
@@ -89,7 +89,7 @@ export function registerGetArticleTool(server: McpServer) {
           item: itemKey,
           subitem: result.subitem,
         });
-        const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
+        const body = formatArticleBody(result);
         const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo);
         const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
         const latestEnforcedVerified = await verifyLatestEnforced(result.lawId, result.revisionInfo);
@@ -156,7 +156,7 @@ export function registerGetArticleTool(server: McpServer) {
         return createToolResult(
           'get_article',
           envelope,
-          `# ${title}\n${result.articleCaption ? `（${result.articleCaption}）\n` : ''}\n${result.text}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+          `# ${title}\n\n${body}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
           startedAt,
         );
       } catch (error) {

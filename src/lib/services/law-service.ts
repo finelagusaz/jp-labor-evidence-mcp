@@ -26,6 +26,8 @@ export interface GetLawArticleResult {
   article: string;
   articleCaption: string;
   text: string;
+  /** text に条見出しの行が含まれるか（formatArticleBody が先頭行を足すかを決める） */
+  captionInText?: boolean;
   egovUrl: string;
   revisionInfo?: EgovRevisionInfo;
   /** 指定された項、または item から特定した項 */
@@ -201,6 +203,7 @@ export async function getLawArticle(params: {
     article: article ?? '',
     articleCaption: result.articleCaption ?? '',
     text: result.text,
+    captionInText: result.captionInText,
     egovUrl,
     revisionInfo: data.revision_info,
     paragraph: params.paragraph ?? result.matchedParagraph,
