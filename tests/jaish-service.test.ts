@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearAllCaches } from '../src/lib/cache.js';
 import { indexMetadataRegistry } from '../src/lib/indexes/index-metadata.js';
 import { tsutatsuIndexRegistry } from '../src/lib/indexes/tsutatsu-index.js';
+import { getIndexFilePath } from '../src/lib/indexes/index-store.js';
 
 vi.mock('../src/lib/jaish-client.js', () => ({
   JAISH_INDEX_PAGES: ['/fixture/success.html', '/fixture/fail.html'],
@@ -49,6 +50,24 @@ describe('jaish-tsutatsu-service fixtures', () => {
     expect(result.failedPages).toHaveLength(1);
     expect(result.warnings[0]?.code).toBe('JAISH_SEARCH_PARTIAL');
     expect(result.route).toBe('upstream_fallback');
+  });
+
+  it('索引の反映に失敗しても検索結果は返す（失敗は stderr に記録）', async () => {
+    // 現行の索引ファイルを壊して、反映（promotion）が必ず失敗する状態にする
+    tsutatsuIndexRegistry.persist('jaish');
+    writeFileSync(getIndexFilePath('jaish'), '{ broken');
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(fetchJaishIndex).mockImplementation(async (path: string) => {
+      if (path === '/fixture/success.html') return successHtml;
+      throw new Error('timeout');
+    });
+
+    const result = await searchJaishTsutatsu({ keyword: '足場', maxPages: 2 });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.title).toContain('足場');
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('jaish の索引'), expect.anything());
+    stderr.mockRestore();
   });
 
   it('全年度失敗なら unavailable を返す', async () => {

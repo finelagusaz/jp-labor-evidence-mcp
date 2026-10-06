@@ -127,7 +127,9 @@ class TsutatsuIndexRegistry {
   /**
    * ディスクの索引にあってメモリに無い entry を取り込む。同じ索引ファイルを複数のプロセス
    * （Claude Desktop と Claude Code など）が共有するため、起動後に他のプロセスが学習した分を
-   * 取り込まずに保存すると、件数が減ったとみなされて反映を拒まれ、他のプロセスの学習分も消してしまう
+   * 取り込まずに保存すると、件数が減ったとみなされて反映を拒まれ、他のプロセスの学習分も消してしまう。
+   * 検索のたびに索引ファイル全体を読む。保存（persist）も毎回ファイル全体を書くので同じ桁のコストだが、
+   * 索引には件数の上限が無いため、大きく育ったら読み書きの方式を見直す
    */
   private mergeFromDisk(source: 'mhlw' | 'jaish'): void {
     let snapshot: SerializedTsutatsuIndex | null;
