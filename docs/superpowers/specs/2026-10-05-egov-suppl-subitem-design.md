@@ -154,7 +154,7 @@ suppl key は出力（一覧・`get_article`・`canonical_id`）で使い、入�
 
 新しい tool と入力の追加なので **minor（0.8.0）**。spec の承認後、`docs/superpowers/plans/` に TDD の task 単位の実装計画を書いてから実装する（parser の共有部分を作り替えるため、順序が効く）。
 
-## 10. 追補: `get_evidence_bundle` への統合と canonical_id の揃え（0.9.0、2026-10-06）
+## 10. 追補: `get_evidence_bundle` への統合と canonical_id の揃え（0.9.0 で実装、2026-10-06）
 
 ### 一次証拠（live の厚労省通達検索）
 

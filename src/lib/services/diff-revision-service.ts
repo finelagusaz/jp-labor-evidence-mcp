@@ -1,9 +1,9 @@
-import { buildEgovArticleCanonicalId } from '../canonical-id.js';
 import { computeUpstreamHash, joinVersionInfo } from '../evidence-metadata.js';
 import { ValidationError } from '../errors.js';
 import type { WarningMessage } from '../types.js';
 import { getArticleByLawId } from './law-service.js';
 import { formatArticleBody } from '../egov-parser.js';
+import { buildArticleCanonicalId, buildArticleTitle } from '../article-locator.js';
 
 export interface DiffEvidenceRecord {
   source_type: 'egov';
@@ -76,6 +76,12 @@ export async function diffRevision(params: {
 
   const diffChunks = computeDiffChunks(baseEvidence.body, headEvidence.body);
   const warnings: WarningMessage[] = [];
+  if (baseEvidence.paragraph !== headEvidence.paragraph) {
+    warnings.push({
+      code: 'DIFF_PARAGRAPH_MISMATCH',
+      message: `改正前は第${baseEvidence.paragraph ?? '?'}項、改正後は第${headEvidence.paragraph ?? '?'}項の号を比べています（paragraph を省いたため、号を含む項を版ごとに特定しました）。同じ項どうしを比べるには paragraph を指定してください。`,
+    });
+  }
 
   return {
     status: 'ok',
@@ -99,20 +105,19 @@ function buildDiffEvidenceRecord(
   item: number | undefined,
   retrievedAt: string,
 ): DiffEvidenceRecord {
-  const normalizedArticle = rawArticle.replace(/_/g, 'の');
-  const articleDisplay = /^第/.test(normalizedArticle) ? normalizedArticle : `第${normalizedArticle}条`;
-  const paraDisplay = paragraph ? `第${paragraph}項` : '';
-  const itemDisplay = item ? `第${item}号` : '';
-  const title = `${article.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
+  // paragraph を省いた号は版ごとに項を特定するので、特定した項を使う
+  const resolvedParagraph = article.paragraph ?? paragraph;
+  const locator = { article: rawArticle, paragraph: resolvedParagraph, item };
+  const title = buildArticleTitle(article.lawTitle, locator);
   const body = formatArticleBody(article);
 
   return {
     source_type: 'egov',
-    canonical_id: buildEgovArticleCanonicalId(article.lawId, rawArticle, paragraph, item),
+    canonical_id: buildArticleCanonicalId(article.lawId, locator),
     law_id: article.lawId,
     law_title: article.lawTitle,
     article: rawArticle,
-    paragraph,
+    paragraph: resolvedParagraph,
     item,
     title,
     body,

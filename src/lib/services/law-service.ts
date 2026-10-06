@@ -586,3 +586,20 @@ export async function verifyLatestEnforced(
     return false;
   }
 }
+
+/**
+ * 附則の key（「令和8年法律第46号」）に対応する改正法の題名を /law_revisions から引く。
+ * amendment_law_num は十を使う漢数字なので law-num の正規形で照合する。一覧に無ければ undefined
+ */
+export async function findAmendmentLawTitle(lawId: string, supplKey: string): Promise<string | undefined> {
+  const wanted = parseLawNum(supplKey);
+  if (!wanted || wanted.number === undefined) return undefined;
+  const { revisions } = await fetchLawRevisions(lawId);
+  for (const rev of revisions ?? []) {
+    const parsed = rev.amendment_law_num ? parseLawNum(rev.amendment_law_num) : undefined;
+    const title = rev.amendment_law_title?.trim();
+    if (parsed && title && lawNumMatches(wanted, parsed)) return title;
+  }
+  return undefined;
+}
+

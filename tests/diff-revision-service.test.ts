@@ -80,4 +80,36 @@ describe('diffRevision', () => {
       article: '32',
     })).rejects.toThrow('同一法令の改正前後比較のみ対応');
   });
+
+  it('paragraph を省いた号が改正前後で別の項に解決されたら DIFF_PARAGRAPH_MISMATCH を出し、canonical_id に各々の項を含める', async () => {
+    const base = {
+      lawTitle: '労働基準法施行規則', lawNum: '昭和二十二年厚生省令第二十三号', promulgationDate: '1947-08-30',
+      article: '5', articleCaption: '', captionInText: false, text: '二 …',
+    };
+    vi.mocked(getArticleByLawId)
+      .mockResolvedValueOnce({ ...base, lawId: 'base-law', egovUrl: 'https://laws.e-gov.go.jp/law/base-law', paragraph: 1 } as any)
+      .mockResolvedValueOnce({ ...base, lawId: 'head-law', egovUrl: 'https://laws.e-gov.go.jp/law/head-law', paragraph: 2 } as any);
+
+    const result = await diffRevision({ baseLawId: 'base-law', headLawId: 'head-law', article: '5', item: 2 });
+
+    expect(result.base_evidence.canonical_id).toBe('egov:base-law:article:5:paragraph:1:item:2');
+    expect(result.head_evidence.canonical_id).toBe('egov:head-law:article:5:paragraph:2:item:2');
+    expect(result.base_evidence.paragraph).toBe(1);
+    expect(result.head_evidence.paragraph).toBe(2);
+    expect(result.warnings.map((w) => w.code)).toContain('DIFF_PARAGRAPH_MISMATCH');
+  });
+
+  it('改正前後で同じ項なら警告しない', async () => {
+    const base = {
+      lawTitle: '労働基準法施行規則', lawNum: '昭和二十二年厚生省令第二十三号', promulgationDate: '1947-08-30',
+      article: '5', articleCaption: '', captionInText: false, text: '二 …', paragraph: 1,
+    };
+    vi.mocked(getArticleByLawId)
+      .mockResolvedValueOnce({ ...base, lawId: 'base-law', egovUrl: 'https://laws.e-gov.go.jp/law/base-law' } as any)
+      .mockResolvedValueOnce({ ...base, lawId: 'head-law', egovUrl: 'https://laws.e-gov.go.jp/law/head-law' } as any);
+
+    const result = await diffRevision({ baseLawId: 'base-law', headLawId: 'head-law', article: '5', item: 2 });
+    expect(result.warnings).toEqual([]);
+  });
 });
+

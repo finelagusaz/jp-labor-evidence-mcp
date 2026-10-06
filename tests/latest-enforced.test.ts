@@ -193,3 +193,19 @@ describe('get_article: PreviousEnforced タグの照合（e-Gov fetch を stub�
     expect(revisionsCalls()).toBe(0);
   });
 });
+
+describe('findAmendmentLawTitle', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('附則の key を /law_revisions の amendment_law_num（十つき）と照合して改正法の題名を返す', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(rosoRevisions)));
+    const { findAmendmentLawTitle } = await import('../src/lib/services/law-service.js');
+    expect(await findAmendmentLawTitle('324AC0000000174', '令和8年法律第46号'))
+      .toBe('民法等の一部を改正する法律の施行に伴う関係法律の整備等に関する法律');
+    expect(await findAmendmentLawTitle('324AC0000000174', '令和8年法律第999号')).toBeUndefined();
+  });
+});
+
