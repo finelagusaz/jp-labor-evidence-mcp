@@ -134,11 +134,19 @@ describe('条見出しの括弧', () => {
   beforeEach(() => vi.resetModules());
   afterEach(() => vi.unstubAllGlobals());
 
-  it('body の先頭の条見出しは括弧が 1 重', async () => {
+  it('条全体: 条見出しは本文の見出し行に 1 回だけ（先頭行を重ねない）', async () => {
     const server = await connect();
     const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article: '32' });
-    expect(env.data.body.startsWith('（労働時間）\n')).toBe(true);
+    expect(env.data.body.startsWith('#### （労働時間）\n')).toBe(true);
+    expect(env.data.body.match(/労働時間）/g)).toHaveLength(1);
     expect(env.data.body).not.toContain('（（');
+  });
+
+  it('項だけ: 本文に条見出しが無いので先頭に 1 行足す', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article: '32', paragraph: 1 });
+    expect(env.data.body.startsWith('（労働時間）\n')).toBe(true);
+    expect(env.data.body.match(/労働時間）/g)).toHaveLength(1);
   });
 
   it('find_related_sources の検索キーワードに括弧つきの条見出しを入れない', async () => {

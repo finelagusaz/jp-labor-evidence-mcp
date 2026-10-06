@@ -1,4 +1,5 @@
 import { buildEgovArticleCanonicalId, buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
+import { formatArticleBody } from '../egov-parser.js';
 import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
 import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
 import { ExternalApiError, ParseError } from '../errors.js';
@@ -67,7 +68,7 @@ export async function getEvidenceBundle(params: {
   const retrievedAt = new Date().toISOString();
   const primaryLatestEnforcedVerified = await verifyLatestEnforced(primary.lawId, primary.revisionInfo);
   const primaryTitle = buildPrimaryTitle(primary.lawTitle, params.article, params.paragraph, params.item);
-  const primaryBody = `${primary.articleCaption ? `（${primary.articleCaption}）\n` : ''}${primary.text}`;
+  const primaryBody = formatArticleBody(primary);
   const primaryEvidence: EvidenceRecord = {
     source_type: 'egov',
     canonical_id: buildEgovArticleCanonicalId(primary.lawId, params.article, params.paragraph, params.item),

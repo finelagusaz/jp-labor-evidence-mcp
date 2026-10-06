@@ -72,8 +72,26 @@ function normalizeSubitemLabel(input: string): string {
  */
 export function normalizeArticleCaption(caption: string): string {
   const trimmed = caption.trim();
-  const m = /^[（(]([^（）()]*)[）)]$/.exec(trimmed);
-  return m ? m[1].trim() : trimmed;
+  if (!/^[（(]/.test(trimmed) || !/[）)]$/.test(trimmed)) return trimmed;
+  // 先頭の括弧が末尾の括弧と対になっているときだけ外す。「（定義）（略）」は崩さず、
+  // 「（車両系建設機械（整地・運搬・積込み用及び掘削用）…経過措置）」（安衛則 第3条）は外す
+  let depth = 0;
+  const chars = [...trimmed];
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] === '（' || chars[i] === '(') depth++;
+    else if (chars[i] === '）' || chars[i] === ')') depth--;
+    if (depth === 0 && i < chars.length - 1) return trimmed;
+  }
+  return depth === 0 ? chars.slice(1, -1).join('').trim() : trimmed;
+}
+
+/**
+ * 条文の body を組む。条全体なら本文に「#### （見出し）」の行があるのでそのまま、
+ * 項・号・細分だけなら本文に条見出しが無いので先頭に「（見出し）」を 1 行足す
+ */
+export function formatArticleBody(result: { articleCaption?: string; text: string; captionInText?: boolean }): string {
+  if (!result.articleCaption || result.captionInText === true) return result.text;
+  return `（${result.articleCaption}）\n${result.text}`;
 }
 
 export interface ExtractResult {
@@ -81,6 +99,8 @@ export interface ExtractResult {
   articleCaption: string;
   /** paragraph を省いて item から項を特定したときの項番号 */
   matchedParagraph?: number;
+  /** text に条見出しの行（「#### （見出し）」）が含まれるか。条全体を返したときだけ true */
+  captionInText: boolean;
 }
 
 export interface ExtractTarget {
@@ -127,10 +147,10 @@ function extractFromArticle(article: EgovNode, target: ExtractTarget): ExtractRe
   if (target.paragraph === undefined && target.item === undefined) {
     const lines: string[] = [];
     parseArticle(article, lines);
-    return { text: lines.join('\n').trim(), articleCaption };
+    return { text: lines.join('\n').trim(), articleCaption, captionInText: articleCaption !== '' };
   }
   const resolved = resolveInParagraphs(directChildren(article, 'Paragraph'), target);
-  return resolved ? { ...resolved, articleCaption } : null;
+  return resolved ? { ...resolved, articleCaption, captionInText: false } : null;
 }
 
 /** 項の並びから、項・号・細分を解決してテキスト化する */
@@ -305,7 +325,7 @@ export function extractSupplProvision(
       }
     }
     const text = lines.join('\n').trim();
-    return text ? { text, articleCaption: '' } : null;
+    return text ? { text, articleCaption: '', captionInText: false } : null;
   }
 
   const paragraphs = directChildren(node, 'Paragraph');
@@ -315,7 +335,7 @@ export function extractSupplProvision(
     );
   }
   const resolved = resolveInParagraphs(paragraphs, target);
-  return resolved ? { ...resolved, articleCaption: '' } : null;
+  return resolved ? { ...resolved, articleCaption: '', captionInText: false } : null;
 }
 
 // ============================

@@ -4,6 +4,7 @@ import { buildEgovArticleCanonicalId, buildEgovTocCanonicalId } from '../lib/can
 import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getLawArticle, getLawToc } from '../lib/services/law-service.js';
+import { formatArticleBody } from '../lib/egov-parser.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const getLawInputSchema = z.object({
@@ -120,7 +121,7 @@ export function registerGetLawTool(server: McpServer) {
         const paraDisplay = args.paragraph ? `第${args.paragraph}項` : '';
         const itemDisplay = args.item ? `第${args.item}号` : '';
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;
-        const body = `${result.articleCaption ? `（${result.articleCaption}）\n` : ''}${result.text}`;
+        const body = formatArticleBody(result);
         const versionInfo = joinVersionInfo([result.lawNum, result.promulgationDate]);
         const lawId = result.egovUrl.split('/').pop() ?? args.law_name;
         const envelope = {
@@ -150,7 +151,7 @@ export function registerGetLawTool(server: McpServer) {
         return createToolResult(
           'get_law',
           envelope,
-          `# ${title}\n${result.articleCaption ? `（${result.articleCaption}）\n` : ''}\n${result.text}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
+          `# ${title}\n\n${body}\n\n---\n出典：e-Gov法令検索（デジタル庁）\nURL: ${result.egovUrl}`,
           startedAt,
         );
       } catch (error) {
