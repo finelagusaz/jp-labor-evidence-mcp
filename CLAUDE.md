@@ -46,7 +46,7 @@ MCP server providing primary-source Japanese labor law evidence (法令、行政
 
 ## Gotchas
 
-- **永続 disk state**: `.jp-labor-evidence-indexes/` (gitignored) が `npm test` 失敗の原因に。`ENTRY_COUNT_DROP_TOO_LARGE` 系 promotion error が出たら `rm -rf .jp-labor-evidence-indexes` で復旧
+- **永続 disk state**: `.jp-labor-evidence-indexes/`（gitignored）は、手元で server や live 確認のスクリプトを動かしたときの runtime 索引。テストはこのディレクトリを使わない（空の状態から全テストを実行しても作られないことを 2026-10-06 に確認）。保守用の `npm run sync:indexes` が promotion error（`ENTRY_COUNT_DROP_TOO_LARGE` など）で止まったときや、手元の索引を初期化したいときは `rm -rf .jp-labor-evidence-indexes`
 - **live 確認のスクリプトは `initializeIndexes()` を先に呼ぶ**: `createServer()` だけでは起動時の索引の読み込みを通らず、本番と違う状態（メモリが空）で動く
 - **egov GENERATED_AT**: [src/lib/indexes/egov-index.ts:10](src/lib/indexes/egov-index.ts#L10) の literal。bundled 法令データの生成時刻、コード更新時に手動で書き換える
   - **bump 時は freshness 結合テストも同じ日付へ追従必須**: [tests/freshness-warnings.test.ts](tests/freshness-warnings.test.ts) の `GENERATED_AT_ISO`、[tests/tool-freshness-warnings.test.ts](tests/tool-freshness-warnings.test.ts) の `GENERATED_AT_MS`、[tests/egov-index.test.ts](tests/egov-index.test.ts) の `setSystemTime`、[tests/status-resource.test.ts](tests/status-resource.test.ts) の `GENERATED_AT_ISO`。怠ると `BUNDLED_INDEX_AGED` の発火位置がズレて test が赤化する
