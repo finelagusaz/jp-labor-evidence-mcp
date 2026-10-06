@@ -13,6 +13,7 @@ class TsutatsuIndexRegistry {
   ]);
 
   recordMhlwResults(results: MhlwSearchResult[], generatedAt = new Date().toISOString()): void {
+    this.mergeFromDisk('mhlw');
     const store = this.entries.get('mhlw')!;
     for (const result of results) {
       const entry = buildMhlwIndexEntry(result, 'fresh');
@@ -23,10 +24,11 @@ class TsutatsuIndexRegistry {
       lastSyncScope: 'runtime_search_results',
       coldStartMinimumScope: 'manual_sync_or_runtime_learning',
     });
-    this.persist('mhlw');
+    this.persistBestEffort('mhlw');
   }
 
   recordJaishResults(results: JaishIndexEntry[], generatedAt = new Date().toISOString()): void {
+    this.mergeFromDisk('jaish');
     const store = this.entries.get('jaish')!;
     for (const result of results) {
       const entry = buildJaishIndexEntry(result, 'fresh');
@@ -37,12 +39,13 @@ class TsutatsuIndexRegistry {
       lastSyncScope: 'runtime_search_results',
       coldStartMinimumScope: 'manual_sync_or_runtime_learning',
     });
-    this.persist('jaish');
+    this.persistBestEffort('jaish');
   }
 
   recordFailure(source: 'mhlw' | 'jaish', failedAt = new Date().toISOString()): void {
     indexMetadataRegistry.recordFailure(source, failedAt);
-    this.persist(source);
+    this.mergeFromDisk(source);
+    this.persistBestEffort(source);
   }
 
   search(source: 'mhlw' | 'jaish', keyword: string, limit: number): {
@@ -115,9 +118,40 @@ class TsutatsuIndexRegistry {
     }
   }
 
+  /** 保守用の同期スクリプトから呼ぶ。反映の失敗は例外で知らせる */
   persist(source: 'mhlw' | 'jaish'): void {
     const promoted = promoteTsutatsuIndexSnapshot(source, this.getSnapshot(source));
     indexMetadataRegistry.register(promoted.meta);
+  }
+
+  /**
+   * ディスクの索引にあってメモリに無い entry を取り込む。同じ索引ファイルを複数のプロセス
+   * （Claude Desktop と Claude Code など）が共有するため、起動後に他のプロセスが学習した分を
+   * 取り込まずに保存すると、件数が減ったとみなされて反映を拒まれ、他のプロセスの学習分も消してしまう
+   */
+  private mergeFromDisk(source: 'mhlw' | 'jaish'): void {
+    let snapshot: SerializedTsutatsuIndex | null;
+    try {
+      snapshot = loadTsutatsuIndexSnapshot(source);
+    } catch {
+      return;
+    }
+    const store = this.entries.get(source)!;
+    for (const entry of snapshot?.entries ?? []) {
+      if (!store.has(entry.canonical_id)) store.set(entry.canonical_id, entry);
+    }
+  }
+
+  /**
+   * 検索のたびの反映。索引は手元の補助的な cache なので、反映に失敗しても検索結果は返し、
+   * 失敗は運用ログ（stderr）にだけ残す
+   */
+  private persistBestEffort(source: 'mhlw' | 'jaish'): void {
+    try {
+      this.persist(source);
+    } catch (error) {
+      console.error(`[jp-labor-evidence-mcp] ${source} の索引をディスクへ反映できませんでした（検索結果には影響しません）:`, error);
+    }
   }
 
   reset(): void {

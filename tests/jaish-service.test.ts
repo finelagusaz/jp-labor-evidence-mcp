@@ -14,12 +14,15 @@ vi.mock('../src/lib/jaish-client.js', () => ({
 
 import { fetchJaishIndex } from '../src/lib/jaish-client.js';
 import { searchJaishTsutatsu } from '../src/lib/services/jaish-tsutatsu-service.js';
+import { useTempIndexDir } from './test-helpers/temp-index-dir.js';
 
 function readFixture(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf-8');
 }
 
 describe('jaish-tsutatsu-service fixtures', () => {
+  useTempIndexDir();
+
   const successHtml = readFixture('tests/fixtures/jaish/index-success.html');
 
   beforeEach(() => {
