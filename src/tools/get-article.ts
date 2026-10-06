@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { buildEgovArticleCanonicalId, buildEgovSupplCanonicalId } from '../lib/canonical-id.js';
-import { formatArticleBody, normalizeItemNum } from '../lib/egov-parser.js';
+import { buildArticleCanonicalId, buildArticleTitle, type ArticleLocatorParts } from '../lib/article-locator.js';
+import { formatArticleBody } from '../lib/egov-parser.js';
 import { computeUpstreamHash, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings, getPendingAmendmentWarnings } from '../lib/evidence-metadata.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getArticleByLawId, getPendingAmendments, verifyLatestEnforced } from '../lib/services/law-service.js';
@@ -81,14 +81,14 @@ export function registerGetArticleTool(server: McpServer) {
           supplementary: args.supplementary,
         });
 
-        const itemKey = args.item !== undefined ? normalizeItemNum(args.item)?.replace(/_/g, 'の') : undefined;
-        const title = buildArticleTitle(result.lawTitle, {
+        const locator: ArticleLocatorParts = {
           supplementary: result.supplementary,
           article: args.article,
           paragraph: result.paragraph,
-          item: itemKey,
+          item: args.item,
           subitem: result.subitem,
-        });
+        };
+        const title = buildArticleTitle(result.lawTitle, locator);
         const body = formatArticleBody(result);
         const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo);
         const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
@@ -128,9 +128,7 @@ export function registerGetArticleTool(server: McpServer) {
           partial_failures: partialFailures,
           data: {
             source_type: 'egov' as const,
-            canonical_id: result.supplementary
-              ? buildEgovSupplCanonicalId(result.lawId, result.supplementary.key, args.article, result.paragraph, itemKey, result.subitem)
-              : buildEgovArticleCanonicalId(result.lawId, args.article!, result.paragraph, itemKey, result.subitem),
+            canonical_id: buildArticleCanonicalId(result.lawId, locator),
             law_id: result.lawId,
             law_title: result.lawTitle,
             article: args.article,
@@ -171,27 +169,3 @@ export function registerGetArticleTool(server: McpServer) {
     }
   );
 }
-
-/** 「労働基準法 附則（令和8年法律第60号・抄）第1条第2項第3号イ（1）」 */
-function buildArticleTitle(
-  lawTitle: string,
-  parts: {
-    supplementary?: { key: string; extract: boolean };
-    article?: string;
-    paragraph?: number;
-    item?: string;
-    subitem?: string;
-  },
-): string {
-  const supplLabel = parts.supplementary
-    ? `附則（${parts.supplementary.key === '制定' ? '制定時' : parts.supplementary.key}${parts.supplementary.extract ? '・抄' : ''}）`
-    : '';
-  const rawArticle = parts.article?.replace(/_/g, 'の');
-  const articleDisplay = rawArticle ? (/^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`) : '';
-  const paraDisplay = parts.paragraph !== undefined ? `第${parts.paragraph}項` : '';
-  const itemDisplay = parts.item !== undefined ? `第${parts.item}号` : '';
-  const [head, ...rest] = parts.subitem?.split('/') ?? [];
-  const subitemDisplay = head !== undefined ? `${head}${rest.map((t) => `（${t}）`).join('')}` : '';
-  return `${lawTitle} ${supplLabel}${articleDisplay}${paraDisplay}${itemDisplay}${subitemDisplay}`;
-}
-
