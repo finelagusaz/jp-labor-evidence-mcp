@@ -46,6 +46,10 @@ const evidenceSchema = z.object({
   version_info: z.string().optional(),
   revision_metadata: revisionMetadataSchema.optional(),
   upstream_hash: z.string(),
+  common_caption: z.object({
+    caption: z.string(),
+    from_article: z.string(),
+  }).optional(),
   article_locator: z.object({
     law_id: z.string(),
     supplementary: z.string().optional(),

@@ -227,3 +227,47 @@ describe('条見出し', () => {
   });
 });
 
+describe('共通見出し（commonCaption）', () => {
+  it('見出しの無い条は、同じ章の直前の見出しを共通見出しとして引き継ぐ（枝番号）', () => {
+    expect(extractArticle(roki, '32の2')?.commonCaption).toEqual({ caption: '労働時間', fromArticle: '32' });
+  });
+
+  it('番号が別の条でも、同じ章の直前の見出しを引き継ぐ', () => {
+    expect(extractArticle(roki, '10')?.commonCaption).toEqual({ caption: '定義', fromArticle: '9' });
+  });
+
+  it('自分の見出しを持つ条には付けない', () => {
+    expect(extractArticle(roki, '32')?.commonCaption).toBeUndefined();
+  });
+
+  it('章の先頭の条は、前の章の見出しを引き継がない', () => {
+    // 第42条は第5章の先頭。直前の条（第4章 第41条）には見出しがあるが、章をまたがない
+    expect(extractArticle(roki, '42')?.commonCaption).toBeUndefined();
+  });
+
+  it('項だけを取り出しても、条の共通見出しを返す', () => {
+    expect(extractArticle(roki, '32の2', 1)?.commonCaption).toEqual({ caption: '労働時間', fromArticle: '32' });
+  });
+
+  it('「削除」の条には付けない', () => {
+    const deleted = structuredClone(roki);
+    const walk = (n: any): void => {
+      if (!n || typeof n === 'string') return;
+      if (n.tag === 'Article' && n.attr?.Num === '10') {
+        n.children = [
+          { tag: 'ArticleTitle', attr: {}, children: ['第十条'] },
+          { tag: 'Paragraph', attr: { Num: '1' }, children: [{ tag: 'ParagraphNum', attr: {}, children: [] }, { tag: 'ParagraphSentence', attr: {}, children: [{ tag: 'Sentence', attr: {}, children: ['削除'] }] }] },
+        ];
+      }
+      (n.children ?? []).forEach(walk);
+    };
+    walk(deleted.law_full_text);
+    expect(extractArticle(deleted, '10')?.commonCaption).toBeUndefined();
+  });
+
+  it('附則の条には付けない', () => {
+    const suppl = selectSupplProvision(roki, '令和8年法律第60号')!;
+    expect(extractSupplProvision(roki, suppl, { article: '11' })?.commonCaption).toBeUndefined();
+  });
+});
+

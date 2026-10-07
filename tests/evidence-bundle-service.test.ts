@@ -586,5 +586,24 @@ describe('getEvidenceBundle', () => {
       expect(vi.mocked(findRelatedSources)).toHaveBeenCalledWith(expect.objectContaining({ article: '7の2' }));
     });
   });
+
+  it('見出しの無い条は、共通見出しを関連通達の検索と順位づけに使い、primary_evidence に載せる', async () => {
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '322AC0000000049', lawTitle: '労働基準法',
+      lawNum: '昭和二十二年法律第四十九号', promulgationDate: '1947-04-07',
+      article: '32の2', articleCaption: '', captionInText: false, text: '**第三十二条の二**\n\n使用者は、…',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+      commonCaption: { caption: '労働時間', fromArticle: '32' },
+    } as any);
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '322AC0000000049', lawTitle: '労働基準法', delegatedLaws: [], searchKeywords: ['労働時間'], warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({ results: [], warnings: [], partialFailures: [] } as any);
+
+    const bundle = await getEvidenceBundle({ lawId: '322AC0000000049', article: '32の2', includeJaish: false });
+
+    expect(vi.mocked(findRelatedSources)).toHaveBeenCalledWith({ lawId: '322AC0000000049', article: '32の2', articleCaption: '労働時間' });
+    expect(bundle.primary_evidence.common_caption).toEqual({ caption: '労働時間', from_article: '32' });
+  });
 });
 

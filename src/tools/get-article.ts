@@ -45,6 +45,13 @@ const getArticleOutputSchema = createToolEnvelopeSchema(
     paragraph: z.number().optional(),
     item: z.union([z.number(), z.string()]).optional(),
     subitem: z.string().optional(),
+    common_caption: z.object({
+      caption: z.string(),
+      from_article: z.string(),
+    }).optional().describe(
+      'この条が自分の見出しを持たないとき、同じ章・節で直前の条に付いた共通見出し（例: 第32条の2 → 第32条の「労働時間」）。' +
+      '法令の書き方の約束から推論したもので、本文（body）には含まれない'
+    ),
     supplementary: z.object({
       key: z.string(),
       amend_law_num: z.string().optional(),
@@ -135,6 +142,10 @@ export function registerGetArticleTool(server: McpServer) {
             paragraph: result.paragraph,
             item: args.item,
             subitem: result.subitem,
+            common_caption: result.commonCaption && {
+              caption: result.commonCaption.caption,
+              from_article: result.commonCaption.fromArticle,
+            },
             supplementary: result.supplementary && {
               key: result.supplementary.key,
               amend_law_num: result.supplementary.amendLawNum,

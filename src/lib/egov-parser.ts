@@ -94,6 +94,13 @@ export function formatArticleBody(result: { articleCaption?: string; text: strin
   return `（${result.articleCaption}）\n${result.text}`;
 }
 
+export interface CommonCaption {
+  /** 共通見出し（括弧なし） */
+  caption: string;
+  /** 共通見出しを持つ条の番号（"32"、"32の2"） */
+  fromArticle: string;
+}
+
 export interface ExtractResult {
   text: string;
   articleCaption: string;
@@ -101,6 +108,8 @@ export interface ExtractResult {
   matchedParagraph?: number;
   /** text に条見出しの行（「#### （見出し）」）が含まれるか。条全体を返したときだけ true */
   captionInText: boolean;
+  /** 自分の見出しを持たない本則の条が属する共通見出し（推論。本文には含めない） */
+  commonCaption?: CommonCaption;
 }
 
 export interface ExtractTarget {
@@ -125,7 +134,49 @@ export function extractArticle(
   if (!mainProvision) return null;
   const article = findArticleWithFallback(mainProvision, articleNum);
   if (!article) return null;
-  return extractFromArticle(article, { paragraph, item, subitem });
+  const result = extractFromArticle(article, { paragraph, item, subitem });
+  if (!result) return null;
+  const commonCaption = findCommonCaption(mainProvision, article);
+  return commonCaption ? { ...result, commonCaption } : result;
+}
+
+/**
+ * 見出しの無い条が属する共通見出しを返す（本則のみ）。
+ * 法令では、連続する条をまとめる見出し（共通見出し）は最初の条にだけ付き、後続の条には付かない。
+ * e-Gov の XML にはその印が無いので、同じ章・節（直近の親）の中で直前の見出しを持つ条を探す。
+ * 章・節をまたがない（章の先頭の条は前の章の見出しを引き継がない）。「削除」の条には付けない
+ */
+function findCommonCaption(scope: EgovNode, article: EgovNode): CommonCaption | undefined {
+  if (findDirectChild(article, 'ArticleCaption')) return undefined;
+  if (isDeletedArticle(article)) return undefined;
+  const parent = findParentNode(scope, article);
+  if (!parent) return undefined;
+  const siblings = directChildren(parent, 'Article');
+  for (let i = siblings.indexOf(article) - 1; i >= 0; i--) {
+    const caption = findDirectChild(siblings[i], 'ArticleCaption');
+    if (caption) {
+      return {
+        caption: normalizeArticleCaption(getText(caption)),
+        fromArticle: (siblings[i].attr?.Num ?? '').replace(/_/g, 'の'),
+      };
+    }
+  }
+  return undefined;
+}
+
+function isDeletedArticle(article: EgovNode): boolean {
+  const body = directChildren(article, 'Paragraph').map((p) => getText(p)).join('').replace(/\s/g, '');
+  return body === '削除';
+}
+
+function findParentNode(node: EgovNode, target: EgovNode): EgovNode | null {
+  for (const child of node.children ?? []) {
+    if (typeof child === 'string') continue;
+    if (child === target) return node;
+    const found = findParentNode(child, target);
+    if (found) return found;
+  }
+  return null;
 }
 
 function findArticleWithFallback(scope: EgovNode, articleNum: string): EgovNode | null {

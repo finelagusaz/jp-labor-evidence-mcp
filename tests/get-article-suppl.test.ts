@@ -157,3 +157,22 @@ describe('条見出しの括弧', () => {
   });
 });
 
+describe('共通見出し', () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('見出しの無い条は common_caption で共通見出しを返し、body には混ぜない', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article: '32の2' });
+    expect(env.status).toBe('ok');
+    expect(env.data.common_caption).toEqual({ caption: '労働時間', from_article: '32' });
+    expect(env.data.body).not.toContain('労働時間）');
+  });
+
+  it('自分の見出しを持つ条では common_caption を返さない', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article: '32' });
+    expect(env.data.common_caption).toBeUndefined();
+  });
+});
+

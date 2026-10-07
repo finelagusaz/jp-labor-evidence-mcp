@@ -19,6 +19,8 @@ export interface EvidenceRecord {
   version_info?: string;
   revision_metadata?: RevisionMetadata;
   upstream_hash: string;
+  /** 主条文が自分の見出しを持たないときの共通見出し（推論。body には含めない） */
+  common_caption?: { caption: string; from_article: string };
   article_locator?: {
     law_id: string;
     /** 附則の key（附則のときだけ） */
@@ -97,6 +99,10 @@ export async function getEvidenceBundle(params: {
       latestEnforcedVerified: primaryLatestEnforcedVerified,
     }),
     upstream_hash: computeUpstreamHash([primary.lawId, primaryTitle, primaryBody, primary.egovUrl]),
+    common_caption: primary.commonCaption && {
+      caption: primary.commonCaption.caption,
+      from_article: primary.commonCaption.fromArticle,
+    },
     article_locator: {
       law_id: primary.lawId,
       supplementary: primary.supplementary?.key,
@@ -114,10 +120,12 @@ export async function getEvidenceBundle(params: {
   // 附則では条番号由来のキーワード（本則の同じ番号の条を指してしまう）と、
   // 決まり文句の多い条見出し（施行期日・経過措置）を検索に使わない
   const suppl = primary.supplementary;
+  // 自分の見出しが無い条は、共通見出し（例: 第32条の2 → 「労働時間」）を検索と順位づけに使う
+  const caption = primary.articleCaption || primary.commonCaption?.caption;
   const related = await findRelatedSources({
     lawId: primary.lawId,
     article: suppl ? undefined : params.article,
-    articleCaption: suppl ? undefined : primary.articleCaption,
+    articleCaption: suppl ? undefined : caption,
   });
   const warnings: WarningMessage[] = [...primaryRevisionWarnings, ...related.warnings];
   const partialFailures: PartialFailure[] = [];
@@ -141,7 +149,7 @@ export async function getEvidenceBundle(params: {
   ];
   const keywords = normalizeKeywords(params.relatedKeywords, inferredKeywords);
   const scoringArticle = suppl ? undefined : params.article;
-  const scoringCaption = suppl ? undefined : primary.articleCaption;
+  const scoringCaption = suppl ? undefined : caption;
   const delegatedEvidence: EvidenceRecord[] = [];
   const relatedTsutatsu: EvidenceRecord[] = [];
 
