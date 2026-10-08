@@ -102,6 +102,65 @@ describe('buildVersionInfoString', () => {
   });
 });
 
+describe('buildVersionInfoString: 版を指定したとき', () => {
+  it('施行済みの版は「この版の施行日」と書く', () => {
+    const s = buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
+      amendment_enforcement_date: '2025-06-01', current_revision_status: 'PreviousEnforced',
+    }, { pinned: true });
+    expect(s).toContain('この版の施行日 2025-06-01（令和7年6月1日）');
+    expect(s).toContain('法令全体のこの版を指し');
+    expect(s).not.toContain('現行版');
+  });
+
+  it('未施行の版は施行日が無いので、施行予定日を書く', () => {
+    const s = buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
+      amendment_enforcement_date: null,
+      amendment_scheduled_enforcement_date: '2028-12-23',
+      current_revision_status: 'UnEnforced',
+    }, { pinned: true });
+    expect(s).toContain('この版の施行予定日 2028-12-23（令和10年12月23日）');
+  });
+
+  it('未施行の版は、施行日の項目に日付が入っていても「施行予定日」と書く（安衛法 2027-01-01 の版など）', () => {
+    const s = buildVersionInfoString('昭和四十七年法律第五十七号', '1972-06-08', {
+      amendment_enforcement_date: '2027-01-01', current_revision_status: 'UnEnforced',
+    }, { pinned: true });
+    expect(s).toContain('この版の施行予定日 2027-01-01（令和9年1月1日）');
+    expect(s).toContain('※この施行予定日は法令全体のこの版を指し');
+  });
+
+  it('版を指定しないときは施行予定日を使わない（現行版の予定日は前方参照ではない）', () => {
+    const s = buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
+      amendment_enforcement_date: null,
+      amendment_scheduled_enforcement_date: '2028-12-23',
+      current_revision_status: 'UnEnforced',
+    });
+    expect(s).toBe('昭和二十二年法律第四十九号 / 1947-04-07（昭和22年4月7日）');
+  });
+});
+
+describe('buildRevisionMetadata: 施行予定日', () => {
+  it('未施行の版だけ scheduled_enforcement_date に載せ、current_enforcement_date には入れない', () => {
+    const meta = buildRevisionMetadata({
+      amendment_enforcement_date: null,
+      amendment_scheduled_enforcement_date: '2028-12-23',
+      current_revision_status: 'UnEnforced',
+    });
+    expect(meta?.current_enforcement_date).toBeUndefined();
+    expect(meta?.scheduled_enforcement_date).toBe('2028-12-23');
+    expect(meta?.scheduled_enforcement_date_wareki).toBe('令和10年12月23日');
+  });
+
+  it('未施行でない版の scheduled は載せない', () => {
+    const meta = buildRevisionMetadata({
+      amendment_enforcement_date: '2026-07-17',
+      amendment_scheduled_enforcement_date: '2026-07-17',
+      current_revision_status: 'CurrentEnforced',
+    });
+    expect(meta?.scheduled_enforcement_date).toBeUndefined();
+  });
+});
+
 describe('getRevisionWarnings', () => {
   it('現行版 / revision 欠落 なら空配列', () => {
     expect(getRevisionWarnings({ current_revision_status: 'CurrentEnforced', repeal_status: 'None' }, '労働基準法')).toEqual([]);

@@ -12,5 +12,6 @@ describe('server instructions', () => {
     expect(instructions).toContain('RUNTIME_INDEX_STALE');
     expect(instructions).toContain('retryable');
     expect(instructions).toContain('_wareki');
+    expect(instructions).toContain('diff_revision に版の ID');
   });
 });

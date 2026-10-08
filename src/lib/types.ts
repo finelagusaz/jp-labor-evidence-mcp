@@ -24,6 +24,8 @@ export interface EgovRevisionInfo {
   law_revision_id?: string | null;
   amendment_enforcement_date?: string | null;
   amendment_enforcement_comment?: string | null;
+  /** 版を生んだ改正の施行予定日。未施行の版では amendment_enforcement_date が null で、こちらにだけ日付が入る */
+  amendment_scheduled_enforcement_date?: string | null;
   amendment_law_num?: string | null;
   amendment_law_title?: string | null;
   amendment_law_id?: string | null;
@@ -38,6 +40,9 @@ export interface RevisionMetadata {
   current_enforcement_date?: string;
   /** current_enforcement_date の和暦（「令和8年6月24日」） */
   current_enforcement_date_wareki?: string;
+  /** 未施行の版の施行予定日（current_revision_status が UnEnforced のときだけ） */
+  scheduled_enforcement_date?: string;
+  scheduled_enforcement_date_wareki?: string;
   enforcement_note?: string;
   amendment_law_num?: string;
   amendment_law_title?: string;

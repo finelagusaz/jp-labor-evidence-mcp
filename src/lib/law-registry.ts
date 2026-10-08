@@ -154,6 +154,17 @@ export function isEgovLawId(input: string): boolean {
 }
 
 /**
+ * e-Gov の版の ID（law_revision_id、例 "322AC0000000049_20250601_504AC0000000068"）を
+ * law_id・改正の施行日・改正法 ID に分ける。版の ID でなければ undefined
+ */
+export function parseEgovLawRevisionId(input: string):
+  | { lawRevisionId: string; lawId: string; date: string; amendmentLawId: string }
+  | undefined {
+  const m = /^(\d{3}[A-Z][A-Z0-9]{11})_(\d{8})_([0-9A-Z]{15})$/.exec(input);
+  return m ? { lawRevisionId: input, lawId: m[1], date: m[2], amendmentLawId: m[3] } : undefined;
+}
+
+/**
  * 法令名を厳密に正規化する
  * 略称 → 正式名称に変換し、既知の law_id を返す
  */
