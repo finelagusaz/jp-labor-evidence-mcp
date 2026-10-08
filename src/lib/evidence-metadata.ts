@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { EgovRevisionInfo, PendingAmendment, RevisionMetadata, WarningMessage } from './types.js';
 import { toJstDateString } from './indexes/time.js';
+import { toWarekiDate, withWareki } from './wareki.js';
 
 export function computeUpstreamHash(parts: string[]): string {
   const hash = createHash('sha256');
@@ -48,9 +49,11 @@ export function buildRevisionMetadata(
 ): RevisionMetadata | undefined {
   if (!revisionInfo) return undefined;
   const lawRevisionId = cleanValue(revisionInfo.law_revision_id);
+  const enforcementDate = cleanValue(revisionInfo.amendment_enforcement_date);
   const metadata: RevisionMetadata = {
     law_revision_id: lawRevisionId,
-    current_enforcement_date: cleanValue(revisionInfo.amendment_enforcement_date),
+    current_enforcement_date: enforcementDate,
+    current_enforcement_date_wareki: enforcementDate && toWarekiDate(enforcementDate),
     enforcement_note: cleanValue(revisionInfo.amendment_enforcement_comment),
     amendment_law_num: cleanValue(revisionInfo.amendment_law_num),
     amendment_law_title: cleanValue(revisionInfo.amendment_law_title),
@@ -73,13 +76,14 @@ export function buildVersionInfoString(
   promulgationDate: string | undefined,
   revisionInfo?: EgovRevisionInfo,
 ): string | undefined {
-  const base = joinVersionInfo([lawNum, promulgationDate]);
+  const promulgation = cleanValue(promulgationDate);
+  const base = joinVersionInfo([lawNum, promulgation && withWareki(promulgation)]);
   const enforcementDate = cleanValue(revisionInfo?.amendment_enforcement_date);
   if (!enforcementDate) return base;
   const note = cleanValue(revisionInfo?.amendment_enforcement_comment);
   const noteSuffix = note ? `（施行期日規定: ${note}）` : '';
   const segment =
-    `現行版の施行日 ${enforcementDate}${noteSuffix}　` +
+    `現行版の施行日 ${withWareki(enforcementDate)}${noteSuffix}　` +
     '※この施行日は法令全体の現行版を指し、引用した条文が改正されたとは限りません';
   return joinVersionInfo([base, segment]);
 }
@@ -110,9 +114,9 @@ export function getRevisionWarnings(
   const repealDate = cleanValue(revisionInfo.repeal_date);
   let body: string;
   if (repeal === 'Repeal' || status === 'Repeal') {
-    body = `この法令は廃止されています${repealDate ? `（廃止日: ${repealDate}）` : ''}。現に効力を有しません。現行の法令を確認してください。`;
+    body = `この法令は廃止されています${repealDate ? `（廃止日: ${withWareki(repealDate)}）` : ''}。現に効力を有しません。現行の法令を確認してください。`;
   } else if (repeal === 'Expire') {
-    body = `この法令は期間満了により失効しています${repealDate ? `（失効日: ${repealDate}）` : ''}。現に効力を有しません。`;
+    body = `この法令は期間満了により失効しています${repealDate ? `（失効日: ${withWareki(repealDate)}）` : ''}。現に効力を有しません。`;
   } else if (repeal === 'LossOfEffectiveness') {
     body = 'この法令は効力を喪失しています。現に効力を有しません。';
   } else if (repeal === 'Suspend') {
@@ -182,6 +186,7 @@ export function buildPendingAmendments(
     }
     amendments.push({
       enforcement_date: enforcementDate,
+      enforcement_date_wareki: toWarekiDate(enforcementDate),
       amendment_law_num: cleanValue(rev.amendment_law_num),
       amendment_law_title: cleanValue(rev.amendment_law_title),
       law_revision_id: cleanValue(rev.law_revision_id),
@@ -227,7 +232,7 @@ export function getPendingAmendmentWarnings(
     warnings.push({
       code: 'UNENFORCED_AMENDMENT_PENDING',
       message:
-        `${lawTitle}: 現行施行版に対し、${parts.join('・')}予定されています（最も近い施行予定日 ${nearest}）。` +
+        `${lawTitle}: 現行施行版に対し、${parts.join('・')}予定されています（最も近い施行予定日 ${withWareki(nearest)}）。` +
         '※これは法令全体の改正予定であり、引用した条文が改正対象に含まれるとは限りません。' +
         '詳細は pending_amendments を参照してください。',
     });

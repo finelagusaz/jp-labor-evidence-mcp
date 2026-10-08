@@ -26,6 +26,7 @@ export const partialFailureSchema = z.object({
 export const revisionMetadataSchema = z.object({
   law_revision_id: z.string().optional(),
   current_enforcement_date: z.string().optional(),
+  current_enforcement_date_wareki: z.string().optional().describe('current_enforcement_date の和暦（例: 令和8年6月24日）'),
   enforcement_note: z.string().optional(),
   amendment_law_num: z.string().optional(),
   amendment_law_title: z.string().optional(),
@@ -40,6 +41,7 @@ export const revisionMetadataSchema = z.object({
 
 export const pendingAmendmentSchema = z.object({
   enforcement_date: z.string(),
+  enforcement_date_wareki: z.string().optional().describe('enforcement_date の和暦（例: 令和9年4月1日）'),
   amendment_law_num: z.string().optional(),
   amendment_law_title: z.string().optional(),
   law_revision_id: z.string().optional(),

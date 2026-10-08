@@ -36,6 +36,8 @@ export interface EgovRevisionInfo {
 export interface RevisionMetadata {
   law_revision_id?: string;
   current_enforcement_date?: string;
+  /** current_enforcement_date の和暦（「令和8年6月24日」） */
+  current_enforcement_date_wareki?: string;
   enforcement_note?: string;
   amendment_law_num?: string;
   amendment_law_title?: string;
@@ -69,6 +71,7 @@ export interface EgovLawRevisionsResponse {
 /** get_article の pending_amendments 各件（施行日昇順） */
 export interface PendingAmendment {
   enforcement_date: string;       // = amendment_enforcement_date（除外により出力では常在）
+  enforcement_date_wareki?: string; // enforcement_date の和暦（「令和9年4月1日」）
   amendment_law_num?: string;
   amendment_law_title?: string;
   law_revision_id?: string;

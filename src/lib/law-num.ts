@@ -135,7 +135,8 @@ export function lawNumMatches(query: ParsedLawNum, target: ParsedLawNum): boolea
   return true;
 }
 
-const ERA_BASE_YEAR: Record<string, number> = { 明治: 1868, 大正: 1912, 昭和: 1926, 平成: 1989, 令和: 2019 };
+/** 元号の元年に当たる西暦年。元号の年 = 西暦年 − base + 1 */
+export const ERA_BASE_YEAR: Record<string, number> = { 明治: 1868, 大正: 1912, 昭和: 1926, 平成: 1989, 令和: 2019 };
 
 /**
  * 公布日の並べ替え用の数値（YYYYMMDD）。公布日の年が番号の年と食い違うときは公布日の年を使う。
