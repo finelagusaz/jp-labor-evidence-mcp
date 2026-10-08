@@ -104,7 +104,7 @@ npm run build
 | `search_law`                 | 法令候補を検索する                                |
 | `find_related_sources`       | 委任先法令候補と関連通達検索キーワードを返す      |
 | `get_evidence_bundle`        | 主条文、委任先法令、関連通達候補を束ねて返す      |
-| `diff_revision`              | 同一法令の 2 つの `law_id` 上で同一条文を比較する |
+| `diff_revision`              | 同一法令の 2 つの版で同一条文を比較する           |
 | `search_mhlw_tsutatsu`       | 厚労省通達を検索する                              |
 | `get_mhlw_tsutatsu`          | `data_id` から厚労省通達本文を取得する            |
 | `search_jaish_tsutatsu`      | JAISH 安衛通達を検索する                          |
@@ -174,9 +174,12 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 
 ### 改正前後の比較
 
-> 旧法と新法で第32条がどう変わったか比較して
+> 労働基準法第58条は、予定されている改正でどう変わるか比較して
 
-1. `diff_revision(base_law_id="<old-law-id>", head_law_id="<new-law-id>", article="32")`
+1. `get_article(law_id="322AC0000000049", article="58", include_pending_amendments=true)` で `pending_amendments[].law_revision_id` を得る
+2. `diff_revision(base_law_id="322AC0000000049", head_law_id="322AC0000000049_20281223_508AC0000000046", article="58")`
+
+`base_law_id` / `head_law_id` には law_id（現行版）か版の ID（`law_revision_id`。過去の版・未施行の版）を渡します。版の ID は `revision_metadata.law_revision_id` や `pending_amendments[].law_revision_id` をそのまま使えます。各側の `version_info` と `revision_metadata` にその版の施行日（未施行の版は施行予定日）が載ります。
 
 > [!WARNING]
 > `diff_revision` は **同一法令の同一条番号** だけを比較対象とします。異なる法令同士の比較は受け付けません。
@@ -281,7 +284,7 @@ npm run sync:indexes:incremental
 - `coverage_below_threshold` のときは fallback を抑止することがある
 - `stale_but_usable` は stale index を使っているので、上位クライアント側で注意表示した方がよい
 - 内蔵法令／通達インデックスが古い場合、tool response の `warnings[]` と起動時ログに freshness 警告が出る。意図的に古い bundle を使う場合（過去事案の再現調査、バージョン固定の回帰環境、オフライン長期運用など）は `LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS=1` で抑止できる
-- `diff_revision` は真の改正履歴 API ではなく、同一法令の 2 つの `law_id` 比較である
+- `diff_revision` で比べられる版は e-Gov の法令履歴（`/law_revisions`）にあるものに限られる（多くの法令で 2016 年ごろ以降）
 - 判例・裁判例は対象外
 
 ## 出典
