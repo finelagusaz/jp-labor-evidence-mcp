@@ -28,6 +28,8 @@ export interface GetLawArticleResult {
   text: string;
   /** text に条見出しの行が含まれるか（formatArticleBody が先頭行を足すかを決める） */
   captionInText?: boolean;
+  /** 自分の見出しを持たない本則の条が属する共通見出し（推論。body には含めない） */
+  commonCaption?: { caption: string; fromArticle: string };
   egovUrl: string;
   revisionInfo?: EgovRevisionInfo;
   /** 指定された項、または item から特定した項 */
@@ -204,6 +206,7 @@ export async function getLawArticle(params: {
     articleCaption: result.articleCaption ?? '',
     text: result.text,
     captionInText: result.captionInText,
+    commonCaption: result.commonCaption,
     egovUrl,
     revisionInfo: data.revision_info,
     paragraph: params.paragraph ?? result.matchedParagraph,
