@@ -114,9 +114,9 @@ export function getRevisionWarnings(
   const repealDate = cleanValue(revisionInfo.repeal_date);
   let body: string;
   if (repeal === 'Repeal' || status === 'Repeal') {
-    body = `この法令は廃止されています${repealDate ? `（廃止日: ${withWareki(repealDate)}）` : ''}。現に効力を有しません。現行の法令を確認してください。`;
+    body = `この法令は廃止されています。${repealDate ? `廃止日は ${withWareki(repealDate)}です。` : ''}現に効力を有しません。現行の法令を確認してください。`;
   } else if (repeal === 'Expire') {
-    body = `この法令は期間満了により失効しています${repealDate ? `（失効日: ${withWareki(repealDate)}）` : ''}。現に効力を有しません。`;
+    body = `この法令は期間満了により失効しています。${repealDate ? `失効日は ${withWareki(repealDate)}です。` : ''}現に効力を有しません。`;
   } else if (repeal === 'LossOfEffectiveness') {
     body = 'この法令は効力を喪失しています。現に効力を有しません。';
   } else if (repeal === 'Suspend') {
@@ -232,7 +232,7 @@ export function getPendingAmendmentWarnings(
     warnings.push({
       code: 'UNENFORCED_AMENDMENT_PENDING',
       message:
-        `${lawTitle}: 現行施行版に対し、${parts.join('・')}予定されています（最も近い施行予定日 ${withWareki(nearest)}）。` +
+        `${lawTitle}: 現行施行版に対し、${parts.join('・')}予定されています。最も近い施行予定日は ${withWareki(nearest)}です。` +
         '※これは法令全体の改正予定であり、引用した条文が改正対象に含まれるとは限りません。' +
         '詳細は pending_amendments を参照してください。',
     });

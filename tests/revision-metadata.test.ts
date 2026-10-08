@@ -114,7 +114,8 @@ describe('getRevisionWarnings', () => {
     expect(w[0]?.code).toBe('LAW_NOT_CURRENTLY_ENFORCED');
     expect(w[0]?.message).toContain('旧・某法: ');
     expect(w[0]?.message).toContain('廃止されています');
-    expect(w[0]?.message).toContain('廃止日: 2020-04-01（令和2年4月1日）');
+    expect(w[0]?.message).toContain('廃止日は 2020-04-01（令和2年4月1日）です。');
+    expect(w[0]?.message).not.toContain('））');
   });
 
   it('current_revision_status 単独（PreviousEnforced）でも発火', () => {

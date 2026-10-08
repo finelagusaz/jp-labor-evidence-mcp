@@ -83,7 +83,7 @@ describe('getPendingAmendmentWarnings', () => {
     expect(w[0].message).toContain('労働安全衛生法: ');
     expect(w[0].message).toContain('現行施行版に対し');
     expect(w[0].message).toContain('未施行の改正が 2 件');
-    expect(w[0].message).toContain('最も近い施行予定日 2027-04-01（令和9年4月1日）'); // 未ソート入力でも min
+    expect(w[0].message).toContain('最も近い施行予定日は 2027-04-01（令和9年4月1日）です。'); // 未ソート入力でも min
     expect(w[0].message).toContain('改正対象に含まれるとは限りません'); // hedge
     expect(w[0].message).not.toContain('法律第'); // 改正法名を列挙しない
   });
