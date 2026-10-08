@@ -19,7 +19,7 @@ v1 は「今引いた条文が**いつ施行の現行版**か」を Evidence に
 - `/law_revisions` 失敗時の graceful degradation（条文は返す）
 
 **非目標（別スコープ / 別 v2 項目）**:
-- `get_evidence_bundle` への統合（bundle は既に多リクエスト・意図的な**次の follow-up**）
+- `get_evidence_bundle` への統合（bundle は既に多リクエスト・意図的な**次の follow-up**）→ 0.12.0 で解決（[2026-10-08-bundle-pending-amendments-design.md](2026-10-08-bundle-pending-amendments-design.md)）
 - 改正法ごとのグループ化（段階施行を「改正法Xのn期施行」とまとめる提示）
 - 和暦併記（別 v2 項目・元号変換 util）→ 0.11.0 で解決（[2026-10-08-wareki-dates-design.md](2026-10-08-wareki-dates-design.md)）
 - 過去版・未施行版の**本文**取得（時点法令。別途）
@@ -244,7 +244,7 @@ wire contract の additive 追加（input optional bool・output optional array�
 - ~~degrade 時の `status`~~ → **解決**: `'partial'`（get_evidence_bundle 規約と統一・§5.5a）。
 - ~~件数上限~~ → **解決**: unbounded 維持（最大15件と小・schema `.max()` は footgun ゆえ付けない。pathological 時のみ実装側 slice＋注記）。
 - ~~`version_pinned_url` の v1 共通化~~ → **解決**: `buildVersionPinnedUrl` 抽出（§6.1）。
-- **残**: `include_pending_amendments` を将来 `get_evidence_bundle` にも広げる際の一貫性（本 spec は get_article 限定・意図的 follow-up）。
+- ~~**残**: `include_pending_amendments` を将来 `get_evidence_bundle` にも広げる際の一貫性（本 spec は get_article 限定・意図的 follow-up）~~ → **解決（0.12.0）**: 同じ名前・同じ既定（false）で主法令だけを確かめる。[2026-10-08-bundle-pending-amendments-design.md](2026-10-08-bundle-pending-amendments-design.md)
 - ~~**残（v1 follow-up）**: CurrentEnforced 版を持たない法令での v1 `LAW_NOT_CURRENTLY_ENFORCED` 挙動の確認~~ → **解決（0.7.2・§11）**: 偽陽性を確認し、`/law_revisions` との施行日照合で解消。
 - ~~**残（別チケット）**: egov 層の型付きエラー化（degrade reason 精度＋v1 retryable 判定の改善）~~ → **解決（0.10.2）**: [2026-10-08-typed-upstream-errors-design.md](2026-10-08-typed-upstream-errors-design.md)
 
