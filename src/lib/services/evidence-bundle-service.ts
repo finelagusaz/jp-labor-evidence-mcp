@@ -3,7 +3,7 @@ import { buildArticleCanonicalId, buildArticleTitle, formatArticleLabel, type Ar
 import { formatArticleBody } from '../egov-parser.js';
 import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
 import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
-import { ExternalApiError, ParseError } from '../errors.js';
+import { failureReasonOf } from '../errors.js';
 import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from './law-service.js';
 import { searchJaishTsutatsu } from './jaish-tsutatsu-service.js';
 import { searchMhlwTsutatsu } from './mhlw-tsutatsu-service.js';
@@ -270,11 +270,7 @@ function mapRelatedSourceFailure(
   target: string,
   error: unknown,
 ): { warning: WarningMessage; partialFailure: PartialFailure } {
-  const reason =
-    error instanceof ExternalApiError ? 'upstream_unavailable' :
-    error instanceof ParseError ? 'parse_error' :
-    error instanceof Error ? error.name :
-    'unknown_error';
+  const reason = failureReasonOf(error);
   const message =
     error instanceof Error ? error.message : '関連情報の取得に失敗しました。';
 

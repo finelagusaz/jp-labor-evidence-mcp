@@ -1,9 +1,11 @@
 export type LawVerificationStatus = 'OK' | 'NAME_MISMATCH' | 'NOT_FOUND' | 'ERROR';
 
-/** Fetch outcome for a single law: the fetched official title, or an error message. */
+import { NotFoundError } from '../errors.js';
+
+/** Fetch outcome for a single law: the fetched official title, or the error. */
 export type FetchOutcome =
   | { ok: true; title: string }
-  | { ok: false; errorMessage: string };
+  | { ok: false; errorMessage: string; notFound: boolean };
 
 export interface LawVerificationResult {
   lawId: string;
@@ -32,19 +34,18 @@ export function normalizeLawTitle(title: string): string {
 }
 
 /**
- * Classify an HTTP/adapter error message. The e-Gov adapter throws
- * `Error("HTTP {status} ...")` for non-2xx and `Error("Circuit breaker is open ...")`
- * when the breaker is tripped; only a 404 is a real NOT_FOUND, everything else
- * (5xx, timeout, circuit-open) is an unconfirmed ERROR.
+ * Classify an adapter error. The adapter throws UpstreamNotFoundError (a NotFoundError)
+ * for a 404; only that is a real NOT_FOUND. Everything else (5xx, timeout,
+ * circuit-open, parse failure) is an unconfirmed ERROR.
  */
-export function classifyFetchError(errorMessage: string): 'NOT_FOUND' | 'ERROR' {
-  return /HTTP 404\b/.test(errorMessage) ? 'NOT_FOUND' : 'ERROR';
+export function classifyFetchError(error: unknown): 'NOT_FOUND' | 'ERROR' {
+  return error instanceof NotFoundError ? 'NOT_FOUND' : 'ERROR';
 }
 
 /** Classify a single law's verification outcome. */
 export function classifyResult(expectedName: string, outcome: FetchOutcome): LawVerificationStatus {
   if (!outcome.ok) {
-    return classifyFetchError(outcome.errorMessage);
+    return outcome.notFound ? 'NOT_FOUND' : 'ERROR';
   }
   return normalizeLawTitle(outcome.title) === normalizeLawTitle(expectedName) ? 'OK' : 'NAME_MISMATCH';
 }
@@ -96,7 +97,11 @@ export async function verifyRegistry(
     try {
       outcome = { ok: true, title: await fetchTitle(lawId) };
     } catch (error) {
-      outcome = { ok: false, errorMessage: error instanceof Error ? error.message : String(error) };
+      outcome = {
+        ok: false,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        notFound: classifyFetchError(error) === 'NOT_FOUND',
+      };
     }
     results.push({
       lawId,

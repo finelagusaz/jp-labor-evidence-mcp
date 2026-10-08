@@ -8,6 +8,7 @@ import {
   verifyRegistry,
   type LawVerificationResult,
 } from '../src/lib/indexes/registry-verification.js';
+import { CircuitOpenError, UpstreamHttpError, UpstreamNotFoundError } from '../src/lib/errors.js';
 
 describe('normalizeLawTitle', () => {
   it('NFKC 正規化と空白除去で表層差を吸収する', () => {
@@ -23,10 +24,12 @@ describe('normalizeLawTitle', () => {
 });
 
 describe('classifyFetchError', () => {
-  it('404 は NOT_FOUND、それ以外は ERROR', () => {
-    expect(classifyFetchError('HTTP 404 Not Found — https://laws.e-gov.go.jp/api/2/law_data/x')).toBe('NOT_FOUND');
-    expect(classifyFetchError('HTTP 503 Service Unavailable — url')).toBe('ERROR');
-    expect(classifyFetchError('Circuit breaker is open for https://... until 2026-...')).toBe('ERROR');
+  it('404（UpstreamNotFoundError）は NOT_FOUND、それ以外は ERROR', () => {
+    expect(classifyFetchError(new UpstreamNotFoundError('https://laws.e-gov.go.jp/api/2/law_data/x'))).toBe('NOT_FOUND');
+    expect(classifyFetchError(new UpstreamHttpError(503, 'Service Unavailable', 'url'))).toBe('ERROR');
+    expect(classifyFetchError(new CircuitOpenError('https://...', '2026-10-08T00:00:00.000Z'))).toBe('ERROR');
+    // 文言に「HTTP 404」を含んでいても、型が 404 でなければ ERROR（文字列で判別しない）
+    expect(classifyFetchError(new Error('HTTP 404 Not Found — url'))).toBe('ERROR');
   });
 });
 
@@ -36,8 +39,8 @@ describe('classifyResult', () => {
     expect(classifyResult('労働基準法', { ok: true, title: '労働基準法施行令' })).toBe('NAME_MISMATCH');
   });
   it('取得失敗はエラー種別へ写像する', () => {
-    expect(classifyResult('X', { ok: false, errorMessage: 'HTTP 404 ...' })).toBe('NOT_FOUND');
-    expect(classifyResult('X', { ok: false, errorMessage: 'HTTP 500 ...' })).toBe('ERROR');
+    expect(classifyResult('X', { ok: false, errorMessage: 'HTTP 404 ...', notFound: true })).toBe('NOT_FOUND');
+    expect(classifyResult('X', { ok: false, errorMessage: 'HTTP 500 ...', notFound: false })).toBe('ERROR');
   });
 });
 
@@ -103,7 +106,7 @@ describe('verifyRegistry', () => {
     const report = await verifyRegistry(
       entries,
       async (id) => {
-        if (id === '349AC0000000116') throw new Error('HTTP 404 Not Found — url');
+        if (id === '349AC0000000116') throw new UpstreamNotFoundError('url');
         return '労働基準法';
       },
       '2026-07-13T02:00:00.000Z'

@@ -246,7 +246,7 @@ wire contract の additive 追加（input optional bool・output optional array�
 - ~~`version_pinned_url` の v1 共通化~~ → **解決**: `buildVersionPinnedUrl` 抽出（§6.1）。
 - **残**: `include_pending_amendments` を将来 `get_evidence_bundle` にも広げる際の一貫性（本 spec は get_article 限定・意図的 follow-up）。
 - ~~**残（v1 follow-up）**: CurrentEnforced 版を持たない法令での v1 `LAW_NOT_CURRENTLY_ENFORCED` 挙動の確認~~ → **解決（0.7.2・§11）**: 偽陽性を確認し、`/law_revisions` との施行日照合で解消。
-- **残（別チケット）**: egov 層の型付きエラー化（degrade reason 精度＋v1 retryable 判定の改善）。
+- ~~**残（別チケット）**: egov 層の型付きエラー化（degrade reason 精度＋v1 retryable 判定の改善）~~ → **解決（0.10.2）**: [2026-10-08-typed-upstream-errors-design.md](2026-10-08-typed-upstream-errors-design.md)
 
 ## 11. 追補: PreviousEnforced タグ付け遅れの偽陽性（2026-10-04）
 
