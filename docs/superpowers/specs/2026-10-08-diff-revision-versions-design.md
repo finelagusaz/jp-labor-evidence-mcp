@@ -13,7 +13,7 @@
 - `GET /api/2/law_data/{law_revision_id}` は過去の版・未施行の版の本文を返し、`revision_info` もその版のもの。`law_info.law_id` は基の law_id
 - 版の ID の形式は `{law_id}_{YYYYMMDD}_{改正法 ID 15 文字}`。登録 40 法令の `/law_revisions` の 1,039 件がすべてこの形式
 - 未施行の版 82 件はすべて `/law_data` で取れた。うち 53 件は `amendment_enforcement_date` に日付があり、29 件は null で `amendment_scheduled_enforcement_date` にだけ日付がある
-- e-Gov の Web の版のページは `https://laws.e-gov.go.jp/law/{law_id}/{YYYYMMDD}_{改正法 ID}`。ブラウザで労基法の 2025-06-01 の版を開き、その版の本文（罰則が拘禁刑）が出ることを確認した。SPA なので存在しない版にも HTTP 200 を返すが、URL は取得できた版の ID からしか作らない
+- e-Gov の Web の版のページは `https://laws.e-gov.go.jp/law/{law_id}/{YYYYMMDD}_{改正法 ID}`。ブラウザで労基法の未施行の版（`20281223_508AC0000000046`）を開き、第58条が現行版（「親権者又は後見人は、未成年者に代つて」）ではなくその版の文（「親権者又は未成年後見人は、未成年者に代わつて」）で出ることを確認した。SPA なので存在しない版にも HTTP 200 を返すが、URL は取得できた版の ID からしか作らない
 - 労基法の現行版（2026-07-17）と未施行の版（2028-12-23）では第57条〜第59条などが変わる（民法改正に伴う「未成年後見人」への整備）
 
 ## 3. 決定

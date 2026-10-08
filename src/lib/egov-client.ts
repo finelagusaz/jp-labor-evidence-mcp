@@ -88,7 +88,7 @@ export async function fetchLawRevisions(lawId: string): Promise<EgovLawRevisions
  * e-Gov の法令ページURLを生成
  */
 export function getEgovUrl(lawId: string, lawRevisionId?: string): string {
-  // 版のページは /law/{law_id}/{施行日}_{改正法 ID}（2026-10-08 にブラウザで版の本文が出ることを確認）
+  // 版のページは /law/{law_id}/{施行日}_{改正法 ID}（2026-10-08 にブラウザで、未施行の版の URL が現行版と違うその版の本文を出すことを確認）
   const revision = lawRevisionId ? parseEgovLawRevisionId(lawRevisionId) : undefined;
   return revision
     ? `https://laws.e-gov.go.jp/law/${revision.lawId}/${revision.date}_${revision.amendmentLawId}`
