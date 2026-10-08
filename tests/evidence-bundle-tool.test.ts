@@ -71,4 +71,38 @@ describe('get_evidence_bundle tool', () => {
     expect(result.content[0]?.text).toContain('## 主条文');
     expect(result.content[0]?.text).toContain('使用者は...');
   });
+
+  it('include_pending_amendments を service に渡し、pending_amendments が outputSchema を通る', async () => {
+    vi.mocked(getEvidenceBundle).mockResolvedValue({
+      status: 'ok',
+      primary_evidence: {
+        source_type: 'egov',
+        canonical_id: 'egov:322AC0000000049:article:32',
+        title: '労働基準法 第32条',
+        body: '使用者は...',
+        source_url: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+        retrieved_at: '2026-10-08T10:00:00.000Z',
+        warnings: [],
+        upstream_hash: 'a'.repeat(64),
+        pending_amendments: [{ enforcement_date: '2027-04-01', enforcement_date_wareki: '令和9年4月1日' }],
+      },
+      delegated_evidence: [],
+      related_tsutatsu: [],
+      warnings: [],
+      partial_failures: [],
+      search_keywords: [],
+    });
+
+    const registerTool = vi.fn();
+    registerGetEvidenceBundleTool(createServerStub(registerTool));
+    const [, config, handler] = registerTool.mock.calls[0];
+    expect(config.inputSchema.parse({ law_id: '322AC0000000049', article: '32', include_pending_amendments: true }))
+      .toMatchObject({ include_pending_amendments: true });
+
+    const result = await handler({ law_id: '322AC0000000049', article: '32', include_pending_amendments: true });
+
+    expect(vi.mocked(getEvidenceBundle).mock.calls[0][0]).toMatchObject({ includePendingAmendments: true });
+    expect(config.outputSchema.parse(result.structuredContent).data.primary_evidence.pending_amendments)
+      .toEqual([{ enforcement_date: '2027-04-01', enforcement_date_wareki: '令和9年4月1日' }]);
+  });
 });

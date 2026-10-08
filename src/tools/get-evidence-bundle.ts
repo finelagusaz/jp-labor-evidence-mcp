@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getEvidenceBundle } from '../lib/services/evidence-bundle-service.js';
-import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope, revisionMetadataSchema } from '../lib/tool-contract.js';
+import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope, pendingAmendmentSchema, revisionMetadataSchema } from '../lib/tool-contract.js';
 
 const inputSchema = z.object({
   law_id: z.string().min(1).max(20).describe(
@@ -20,6 +20,10 @@ const inputSchema = z.object({
   ),
   subitem: z.string().min(1).max(40).optional().describe(
     '号の下の細分（item と併せて指定）。例: "イ", "イ (1)"'
+  ),
+  include_pending_amendments: z.boolean().optional().describe(
+    '主法令の未施行の改正（施行予定日つき）を検知して primary_evidence.pending_amendments に載せる。別途 e-Gov /law_revisions を1回追引きするため既定 false（get_article と同じ）。' +
+    '委任先の法令（施行規則など）は確認しない'
   ),
   related_keywords: z.array(z.string().min(1).max(100)).max(3).optional().describe(
     '関連通達検索に使う明示キーワード。省略時は条見出しや法令名から保守的に生成。'
@@ -45,6 +49,7 @@ const evidenceSchema = z.object({
   })),
   version_info: z.string().optional(),
   revision_metadata: revisionMetadataSchema.optional(),
+  pending_amendments: z.array(pendingAmendmentSchema).optional(),
   upstream_hash: z.string(),
   common_caption: z.object({
     caption: z.string(),
@@ -92,7 +97,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
   server.registerTool(
     'get_evidence_bundle',
     {
-      description: '確定済み条文を主根拠として、関連通達候補を束ねた evidence bundle を返す。附則（経過措置・施行期日）も supplementary で主根拠にできる。',
+      description: '確定済み条文を主根拠として、関連通達候補を束ねた evidence bundle を返す。附則（経過措置・施行期日）も supplementary で主根拠にできる。未施行の改正確認は既定で行わない（include_pending_amendments: true 指定時のみ）。',
       inputSchema,
       outputSchema,
     },
@@ -107,6 +112,7 @@ export function registerGetEvidenceBundleTool(server: McpServer) {
           item: args.item,
           subitem: args.subitem,
           supplementary: args.supplementary,
+          includePendingAmendments: args.include_pending_amendments,
           relatedKeywords: args.related_keywords,
           includeJaish: args.include_jaish,
           mhlwLimit: args.mhlw_limit,

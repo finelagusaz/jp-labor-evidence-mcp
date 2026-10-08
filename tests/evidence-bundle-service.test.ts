@@ -7,6 +7,7 @@ vi.mock('../src/lib/services/law-service.js', () => ({
   findRelatedSources: vi.fn(),
   verifyLatestEnforced: vi.fn().mockResolvedValue(false),
   findAmendmentLawTitle: vi.fn(),
+  getPendingAmendments: vi.fn(),
 }));
 
 vi.mock('../src/lib/services/mhlw-tsutatsu-service.js', () => ({
@@ -17,7 +18,7 @@ vi.mock('../src/lib/services/jaish-tsutatsu-service.js', () => ({
   searchJaishTsutatsu: vi.fn(),
 }));
 
-import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from '../src/lib/services/law-service.js';
+import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, getPendingAmendments, verifyLatestEnforced } from '../src/lib/services/law-service.js';
 import { searchMhlwTsutatsu } from '../src/lib/services/mhlw-tsutatsu-service.js';
 import { searchJaishTsutatsu } from '../src/lib/services/jaish-tsutatsu-service.js';
 import { getEvidenceBundle } from '../src/lib/services/evidence-bundle-service.js';
@@ -643,3 +644,70 @@ describe('getEvidenceBundle', () => {
   });
 });
 
+describe('getEvidenceBundle: 未施行の改正', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(verifyLatestEnforced).mockResolvedValue(false);
+    vi.mocked(getArticleByLawId).mockResolvedValue({
+      lawId: '322AC0000000049',
+      lawTitle: '労働基準法',
+      lawNum: '昭和二十二年法律第四十九号',
+      promulgationDate: '1947-04-07',
+      article: '32',
+      articleCaption: '労働時間',
+      text: '使用者は、労働者に...',
+      egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+    });
+    vi.mocked(findRelatedSources).mockResolvedValue({
+      lawId: '322AC0000000049', lawTitle: '労働基準法', delegatedLaws: [], searchKeywords: ['労働時間'], warnings: [],
+    });
+    vi.mocked(searchMhlwTsutatsu).mockResolvedValue({
+      status: 'ok', results: [], totalCount: 0, page: 0, partialFailures: [], warnings: [],
+    });
+    vi.mocked(searchJaishTsutatsu).mockResolvedValue({
+      status: 'ok', results: [], pagesSearched: 1, failedPages: [], warnings: [],
+    });
+  });
+
+  it('既定では確認しない（pending_amendments を載せず、追加の取得もしない）', async () => {
+    const result = await getEvidenceBundle({ lawId: '322AC0000000049', article: '32' });
+    expect(getPendingAmendments).not.toHaveBeenCalled();
+    expect(result.primary_evidence.pending_amendments).toBeUndefined();
+    expect(result.warnings.some((w) => w.code === 'UNENFORCED_AMENDMENT_PENDING')).toBe(false);
+  });
+
+  it('includePendingAmendments: 主法令の未施行の改正を primary_evidence に載せ、警告を出す', async () => {
+    vi.mocked(getPendingAmendments).mockResolvedValue({
+      amendments: [
+        { enforcement_date: '2027-04-01', enforcement_date_wareki: '令和9年4月1日', amendment_law_num: '令和七年法律第三十三号' },
+        { enforcement_date: '2028-12-23', enforcement_date_wareki: '令和10年12月23日', amendment_law_num: '令和八年法律第四十六号' },
+      ],
+      excludedCount: 0,
+    });
+    const result = await getEvidenceBundle({ lawId: '322AC0000000049', article: '32', includePendingAmendments: true });
+    expect(getPendingAmendments).toHaveBeenCalledWith('322AC0000000049');
+    expect(result.status).toBe('ok');
+    expect(result.primary_evidence.pending_amendments?.map((a) => a.enforcement_date)).toEqual(['2027-04-01', '2028-12-23']);
+    const warning = result.warnings.find((w) => w.code === 'UNENFORCED_AMENDMENT_PENDING');
+    expect(warning?.message).toContain('労働基準法: ');
+    expect(warning?.message).toContain('未施行の改正が 2 件');
+  });
+
+  it('includePendingAmendments: 未施行の改正が無ければ空配列で、警告は出さない', async () => {
+    vi.mocked(getPendingAmendments).mockResolvedValue({ amendments: [], excludedCount: 0 });
+    const result = await getEvidenceBundle({ lawId: '322AC0000000049', article: '32', includePendingAmendments: true });
+    expect(result.status).toBe('ok');
+    expect(result.primary_evidence.pending_amendments).toEqual([]);
+    expect(result.warnings.some((w) => w.code === 'UNENFORCED_AMENDMENT_PENDING')).toBe(false);
+  });
+
+  it('確認に失敗しても主条文は返し、partial と PENDING_AMENDMENT_CHECK_FAILED に落とす', async () => {
+    vi.mocked(getPendingAmendments).mockRejectedValue(new ExternalApiError('HTTP 503', { retryable: true }));
+    const result = await getEvidenceBundle({ lawId: '322AC0000000049', article: '32', includePendingAmendments: true });
+    expect(result.status).toBe('partial');
+    expect(result.primary_evidence.body).toContain('使用者は');
+    expect(result.primary_evidence.pending_amendments).toBeUndefined();
+    expect(result.partial_failures).toContainEqual({ source: 'egov', target: 'law_revisions:322AC0000000049', reason: 'upstream_unavailable' });
+    expect(result.warnings.some((w) => w.code === 'PENDING_AMENDMENT_CHECK_FAILED')).toBe(true);
+  });
+});
