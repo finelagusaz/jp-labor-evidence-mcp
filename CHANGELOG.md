@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-08
+
+### Added
+
+- `diff_revision` で版を指定して比べられるようにした。`base_law_id` / `head_law_id` に law_id（現行版）のほか、版の ID（`law_revision_id`。例 `322AC0000000049_20281223_508AC0000000046`）を渡せる。`get_article` の `revision_metadata.law_revision_id` や `pending_amendments[].law_revision_id` をそのまま使え、未施行の改正の版を渡せば施行後に条文がどう変わるかを比べられる
+- `diff_revision` の各側に `revision_metadata` と、その版の施行日を書いた `version_info` を載せる。版の ID で指定した側は「この版の施行日」、未施行の版は「この版の施行予定日」と書く。版の ID で指定した側は `law_revision_id` を返し、`canonical_id` と `source_url` もその版のものにする
+- `revision_metadata.scheduled_enforcement_date`（＋和暦）: 未施行の版の施行予定日
+- LLM 向けの `instructions` に、改正前後の比較は `diff_revision` に版の ID を渡すよう追記
+
+### Changed
+
+- `diff_revision` の同じ法令の判定を、題名ではなく law_id で行う（題名の一致も従来どおり認める）。改正で題名が変わった法令の版どうしも比べられる
+- `diff_revision` の `LAW_NOT_CURRENTLY_ENFORCED` の警告の前に「比較元: 」「比較先: 」を付ける
+- `diff_revision` は law_id どうしの比較でも、`version_info` に現行版の施行日を載せる
+
 ## [0.12.0] - 2026-10-08
 
 ### Added
