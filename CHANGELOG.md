@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-08
+
+### Added
+
+- 日付に和暦を添える。ISO の日付はそのまま残す
+  - `version_info` の公布日と現行版の施行日: `1947-04-07（昭和22年4月7日） / 現行版の施行日 2026-07-17（令和8年7月17日）`（`get_article` / `get_evidence_bundle` / `list_suppl_provisions`）
+  - `revision_metadata.current_enforcement_date_wareki`、`pending_amendments[].enforcement_date_wareki`（例: `令和9年4月1日`）
+  - 警告文の施行予定日（`UNENFORCED_AMENDMENT_PENDING`）、廃止日・失効日（`LAW_NOT_CURRENTLY_ENFORCED`）。括弧が入れ子にならないよう、日付は文を分けて書く（`最も近い施行予定日は 2027-04-01（令和9年4月1日）です。`）
+- LLM 向けの `instructions` に、和暦は `*_wareki` の値を使い、自分で換算しないよう追記
+- 元号は改元の日で切り替える（2019-04-30 は平成31年、2019-05-01 は令和元年）。1 年目は「元年」と書く。太陽暦の採用（1873-01-01）より前の日付には和暦を付けない
+
 ## [0.10.2] - 2026-10-08
 
 ### Fixed

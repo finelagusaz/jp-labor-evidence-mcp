@@ -49,7 +49,8 @@ describe('get_article revision (挙動)', () => {
     const result = await handler({ law_id: '322AC0000000049', article: '32' });
     expect(result.structuredContent.data.revision_metadata.current_enforcement_date).toBe('2026-06-24');
     expect(result.structuredContent.data.revision_metadata.version_pinned_url).toContain('/api/2/law_data/');
-    expect(result.structuredContent.data.version_info).toContain('現行版の施行日 2026-06-24');
+    expect(result.structuredContent.data.revision_metadata.current_enforcement_date_wareki).toBe('令和8年6月24日');
+    expect(result.structuredContent.data.version_info).toContain('現行版の施行日 2026-06-24（令和8年6月24日）');
     expect(result.structuredContent.warnings.some((w: any) => w.code === 'LAW_NOT_CURRENTLY_ENFORCED')).toBe(false);
   });
 

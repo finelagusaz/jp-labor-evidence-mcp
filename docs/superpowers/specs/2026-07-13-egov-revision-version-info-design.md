@@ -22,7 +22,7 @@
 
 **非目標（v2 backlog へ）**:
 - **未施行改正の検知/warning**。`amendment_scheduled_enforcement_date` は「今返っている版を生んだ改正の暫定施行日」であって将来の未施行改正への前方参照では**ない**（§3 の一次証拠）。真の未施行改正検知は別エンドポイント `GET /api/2/law_revisions/{law_id}` で全版を列挙し `current_revision_status == "UnEnforced"` を探す必要があり、追加リクエスト・キャッシュ・エラー処理を伴う。v1 では出さない。
-- **和暦併記**（施行日）。era 変換 util を要するため v1 は ISO 固定。改正法番号は API が既に和暦（例「令和八年法律第四十六号」）で返すため情報は保全される。
+- **和暦併記**（施行日）。era 変換 util を要するため v1 は ISO 固定。→ **0.11.0 で解決**（[2026-10-08-wareki-dates-design.md](2026-10-08-wareki-dates-design.md)）。改正法番号は API が既に和暦（例「令和八年法律第四十六号」）で返すため情報は保全される。
 - `diff_revision`・deprecated `get_law` への version_info 強化の波及（§6.5）。
 - 廃止法令のフル UX（廃止日・後継法・時点法令の本文取得など）。
 - 条文本文の bundled 化。
@@ -244,4 +244,4 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 
 ## 11. 未解決事項
 
-- なし（v1 スコープは確定）。v2 候補は「未施行改正検知（`/law_revisions`）」「和暦併記」「diff_revision への波及」「廃止フル UX」で、backlog メモに残す。
+- なし（v1 スコープは確定）。v2 候補は「未施行改正検知（`/law_revisions`）」「和暦併記（0.11.0 で解決）」「diff_revision への波及」「廃止フル UX」で、backlog メモに残す。

@@ -39,6 +39,7 @@ describe('buildPendingAmendments', () => {
     expect(built.amendments[0].law_revision_id).toBe('L_20270401_507');
     expect(built.amendments[1].law_revision_id).toBe('L_20270401_508');
     expect(built.amendments[0].version_pinned_url).toContain('/api/2/law_data/L_20270401_507');
+    expect(built.amendments.map((a) => a.enforcement_date_wareki)).toEqual(['令和9年4月1日', '令和9年4月1日', '令和12年4月1日']);
   });
 
   it('enforcement_date 欠落の UnEnforced 版は除外し excludedCount で数える', () => {
@@ -82,7 +83,7 @@ describe('getPendingAmendmentWarnings', () => {
     expect(w[0].message).toContain('労働安全衛生法: ');
     expect(w[0].message).toContain('現行施行版に対し');
     expect(w[0].message).toContain('未施行の改正が 2 件');
-    expect(w[0].message).toContain('最も近い施行予定日 2027-04-01'); // 未ソート入力でも min
+    expect(w[0].message).toContain('最も近い施行予定日は 2027-04-01（令和9年4月1日）です。'); // 未ソート入力でも min
     expect(w[0].message).toContain('改正対象に含まれるとは限りません'); // hedge
     expect(w[0].message).not.toContain('法律第'); // 改正法名を列挙しない
   });

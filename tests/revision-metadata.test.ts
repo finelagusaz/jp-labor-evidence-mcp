@@ -29,6 +29,7 @@ describe('buildRevisionMetadata', () => {
     };
     const meta = buildRevisionMetadata(revisionInfo);
     expect(meta?.current_enforcement_date).toBe('2026-06-24');
+    expect(meta?.current_enforcement_date_wareki).toBe('令和8年6月24日');
     expect(meta?.amendment_law_num).toBe('令和八年法律第四十六号');
     expect(meta?.current_revision_status).toBe('CurrentEnforced');
     expect(meta?.version_pinned_url).toBe(
@@ -52,6 +53,11 @@ describe('buildRevisionMetadata', () => {
     expect(buildRevisionMetadata({})).toBeUndefined();
     expect(buildRevisionMetadata({ amendment_law_num: null })).toBeUndefined();
   });
+
+  it('施行日が無ければ和暦も載せない', () => {
+    const meta = buildRevisionMetadata({ amendment_law_num: '令和八年法律第四十六号' });
+    expect(meta?.current_enforcement_date_wareki).toBeUndefined();
+  });
 });
 
 describe('buildVersionInfoString', () => {
@@ -62,7 +68,8 @@ describe('buildVersionInfoString', () => {
     });
     expect(s).toContain('昭和二十二年法律第四十九号');
     expect(s).toContain('1947-04-07');
-    expect(s).toContain('現行版の施行日 2026-06-24');
+    expect(s).toContain('現行版の施行日 2026-06-24（令和8年6月24日）');
+    expect(s).toContain('1947-04-07（昭和22年4月7日）');
     expect(s).toContain('引用した条文が改正されたとは限りません');
   });
 
@@ -78,9 +85,9 @@ describe('buildVersionInfoString', () => {
 
   it('revision または施行日が無ければ base のみへ degrade（JST を付けない）', () => {
     expect(buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', undefined))
-      .toBe('昭和二十二年法律第四十九号 / 1947-04-07');
+      .toBe('昭和二十二年法律第四十九号 / 1947-04-07（昭和22年4月7日）');
     expect(buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', { repeal_status: 'None' }))
-      .toBe('昭和二十二年法律第四十九号 / 1947-04-07');
+      .toBe('昭和二十二年法律第四十九号 / 1947-04-07（昭和22年4月7日）');
     expect(buildVersionInfoString('昭和二十二年法律第四十九号', '1947-04-07', {
       amendment_enforcement_date: '2026-06-24',
     })).not.toContain('JST');
@@ -107,7 +114,8 @@ describe('getRevisionWarnings', () => {
     expect(w[0]?.code).toBe('LAW_NOT_CURRENTLY_ENFORCED');
     expect(w[0]?.message).toContain('旧・某法: ');
     expect(w[0]?.message).toContain('廃止されています');
-    expect(w[0]?.message).toContain('2020-04-01');
+    expect(w[0]?.message).toContain('廃止日は 2020-04-01（令和2年4月1日）です。');
+    expect(w[0]?.message).not.toContain('））');
   });
 
   it('current_revision_status 単独（PreviousEnforced）でも発火', () => {

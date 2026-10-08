@@ -21,7 +21,7 @@ v1 は「今引いた条文が**いつ施行の現行版**か」を Evidence に
 **非目標（別スコープ / 別 v2 項目）**:
 - `get_evidence_bundle` への統合（bundle は既に多リクエスト・意図的な**次の follow-up**）
 - 改正法ごとのグループ化（段階施行を「改正法Xのn期施行」とまとめる提示）
-- 和暦併記（別 v2 項目・元号変換 util）
+- 和暦併記（別 v2 項目・元号変換 util）→ 0.11.0 で解決（[2026-10-08-wareki-dates-design.md](2026-10-08-wareki-dates-design.md)）
 - 過去版・未施行版の**本文**取得（時点法令。別途）
 - 人間可読 `version_info`(string) の変更（v1 の現行版表示のまま据え置き。未施行ロードマップは構造化 `pending_amendments`＋警告の2層へ。text 節は追加しない・§5.4）
 
