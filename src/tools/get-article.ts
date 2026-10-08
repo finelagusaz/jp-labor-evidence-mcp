@@ -14,7 +14,7 @@ const getArticleInputSchema = z.object({
     'resolve_law または search_law で確定した e-Gov law_id。例: "322AC0000000049"'
   ),
   article: z.string().min(1).max(20).optional().describe(
-    '条文番号。例: "32", "36", "32の2", "第36条"。supplementary を指定したときは省略でき、省くと附則の直下（条を持たない附則の項）を対象にする'
+    '条文番号。例: "32", "36", "32の2", "第36条", "第32条の2"。supplementary を指定したときは省略でき、省くと附則の直下（条を持たない附則の項）を対象にする'
   ),
   supplementary: z.string().min(1).max(60).optional().describe(
     '附則を対象にする。"制定" で制定時附則、改正附則は改正法の法令番号で指定する（例: "令和8年法律第46号"、"令和八年法律第四十六号"）。' +

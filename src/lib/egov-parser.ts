@@ -18,10 +18,19 @@ import { formatSupplKey, kanjiToNumber, lawNumMatches, parseLawNum, type ParsedL
 // ============================
 
 /**
- * 条文番号を正規化する
- * "33" → "33", "33の2" → "33_2", "第33条" → "33", "33-2" → "33_2"
+ * 条文番号を Article@Num と同じ形に正規化する
+ * "33" / "第33条" → "33"、"33の2" / "第33条の2" / "33条の2" / "第三十三条の二" / "33-2" → "33_2"。
+ * 「条」の後ろは枝番号（"の2"）だけを拾い、"第1項" などは捨てる。
+ * 数に直せない形（範囲の Num "4:5" など）は、従来の文字列の置き換えだけを行う
  */
 export function normalizeArticleNum(input: string): string {
+  const s = input.normalize('NFKC').trim().replace(/^第/, '');
+  const m = /^(.+?)条((?:[のノ][〇一二三四五六七八九十百千\d]+)*)/.exec(s);
+  const combined = m ? `${m[1]}${m[2]}` : s;
+  const parts = combined.split(/[のノ_-]/).map((part) => kanjiToNumber(part));
+  if (parts.length > 0 && parts.every((n) => n !== undefined)) {
+    return parts.join('_');
+  }
   let num = input.trim();
   num = num.replace(/^第/, '').replace(/条.*$/, '');
   num = num.replace(/の/g, '_');

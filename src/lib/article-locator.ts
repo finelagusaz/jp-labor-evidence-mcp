@@ -1,5 +1,6 @@
 import { buildEgovArticleCanonicalId, buildEgovSupplCanonicalId } from './canonical-id.js';
-import { normalizeItemNum } from './egov-parser.js';
+import { normalizeArticleNum, normalizeItemNum } from './egov-parser.js';
+import { toKanjiNumeral } from './law-num.js';
 
 /** 条文の位置。paragraph は指定された項、または item から特定した項 */
 export interface ArticleLocatorParts {
@@ -9,6 +10,26 @@ export interface ArticleLocatorParts {
   item?: number | string;
   /** 細分の正規形（"ロ/1/iii"） */
   subitem?: string;
+}
+
+/** canonical_id 用の条番号の正規形。"第32条の2" / "32の2" / "第三十二条の二" → "32の2"、"第36条" → "36" */
+export function articleKeyOf(article: string): string {
+  return normalizeArticleNum(article).replace(/_/g, 'の');
+}
+
+/**
+ * 条番号を法令の表記にする。"32の2" / "第32条の2" → "第32条の2"、"32_3_2" → "第32条の3の2"。
+ * kanji: true なら通達の書き方（"第三十二条の二"）。数に直せない形はそのまま「第…条」で包む
+ */
+export function formatArticleLabel(article: string, options: { kanji?: boolean } = {}): string {
+  const normalized = normalizeArticleNum(article);
+  if (!/^\d+(?:_\d+)*$/.test(normalized)) {
+    const raw = article.replace(/_/g, 'の');
+    return /^第.+条/.test(raw) ? raw : `第${raw}条`;
+  }
+  const [head, ...branches] = normalized.split('_').map(Number);
+  const num = (n: number) => (options.kanji ? toKanjiNumeral(n) : String(n));
+  return `第${num(head)}条${branches.map((b) => `の${num(b)}`).join('')}`;
 }
 
 /** 号の表示・識別子用の正規形（"一の二" → "1の2"、6 → "6"） */
@@ -22,8 +43,7 @@ export function buildArticleTitle(lawTitle: string, parts: ArticleLocatorParts):
   const supplLabel = parts.supplementary
     ? `附則（${parts.supplementary.key === '制定' ? '制定時' : parts.supplementary.key}${parts.supplementary.extract ? '・抄' : ''}）`
     : '';
-  const rawArticle = parts.article?.replace(/_/g, 'の');
-  const articleDisplay = rawArticle ? (/^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`) : '';
+  const articleDisplay = parts.article ? formatArticleLabel(parts.article) : '';
   const paraDisplay = parts.paragraph !== undefined ? `第${parts.paragraph}項` : '';
   const itemKey = itemKeyOf(parts.item);
   const itemDisplay = itemKey !== undefined ? `第${itemKey}号` : '';
@@ -36,6 +56,6 @@ export function buildArticleTitle(lawTitle: string, parts: ArticleLocatorParts):
 export function buildArticleCanonicalId(lawId: string, parts: ArticleLocatorParts): string {
   const itemKey = itemKeyOf(parts.item);
   return parts.supplementary
-    ? buildEgovSupplCanonicalId(lawId, parts.supplementary.key, parts.article, parts.paragraph, itemKey, parts.subitem)
-    : buildEgovArticleCanonicalId(lawId, parts.article ?? '', parts.paragraph, itemKey, parts.subitem);
+    ? buildEgovSupplCanonicalId(lawId, parts.supplementary.key, parts.article && articleKeyOf(parts.article), parts.paragraph, itemKey, parts.subitem)
+    : buildEgovArticleCanonicalId(lawId, parts.article ? articleKeyOf(parts.article) : '', parts.paragraph, itemKey, parts.subitem);
 }

@@ -8,6 +8,7 @@ import { buildPendingAmendments, isLatestEnforcedRevision } from '../evidence-me
 import { NormalizedCache } from '../cache.js';
 import { extractArticle, extractSupplProvision, extractToc, listSupplProvisions, normalizeArticleCaption, normalizeSubitemPath, selectSupplProvision, type SupplProvisionInfo } from '../egov-parser.js';
 import { lawNumMatches, parseLawNum, promulgationSortKey } from '../law-num.js';
+import { articleKeyOf, formatArticleLabel } from '../article-locator.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
 import { indexMetadataRegistry } from '../indexes/index-metadata.js';
@@ -188,7 +189,7 @@ export async function getLawArticle(params: {
 
   if (!result) {
     const supplDesc = suppl ? `附則（${suppl.key}）` : '';
-    const articleDesc = article ? `第${article}条` : '';
+    const articleDesc = article ? formatArticleLabel(article) : '';
     const paraDesc = params.paragraph ? `第${params.paragraph}項` : '';
     const itemDesc = params.item !== undefined ? `第${params.item}号` : '';
     const subitemDesc = params.subitem ?? '';
@@ -535,25 +536,17 @@ function buildRelatedSearchKeywords(params: {
   ).slice(0, 6);
 }
 
+/** 検索キーワード用の条番号（"第32条の2" と、通達の書き方の "第三十二条の二"） */
 function buildArticleReferenceCandidates(article: string): string[] {
-  const normalized = normalizeArticleReference(article);
-  const bare = normalized.replace(/^第/, '').replace(/条$/, '');
-  return Array.from(new Set([
-    normalized,
-    bare,
-    `第${bare}条`,
-    `${bare}条`,
-  ]));
+  return Array.from(new Set([formatArticleLabel(article), formatArticleLabel(article, { kanji: true })]));
 }
 
 function normalizeArticleReference(article: string): string {
-  const raw = article.replace(/_/g, 'の').trim();
-  return /^第.+条$/.test(raw) ? raw : `第${raw.replace(/^第/, '').replace(/条$/, '')}条`;
+  return formatArticleLabel(article);
 }
 
 function getPracticeKeywords(lawId: string, article?: string): string[] {
-  const normalizedArticle = article?.replace(/_/g, 'の').replace(/^第/, '').replace(/条$/, '');
-  const key = normalizedArticle ? `${lawId}:${normalizedArticle}` : lawId;
+  const key = article ? `${lawId}:${articleKeyOf(article)}` : lawId;
   return RELATED_SOURCE_KEYWORD_MAP[key] ?? [];
 }
 

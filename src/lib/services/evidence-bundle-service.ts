@@ -1,5 +1,5 @@
 import { buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
-import { buildArticleCanonicalId, buildArticleTitle, type ArticleLocatorParts } from '../article-locator.js';
+import { buildArticleCanonicalId, buildArticleTitle, formatArticleLabel, type ArticleLocatorParts } from '../article-locator.js';
 import { formatArticleBody } from '../egov-parser.js';
 import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
 import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
@@ -440,8 +440,10 @@ function collectMatchSignals(params: {
     });
   }
 
+  // 通達の見出しは全角数字（「第３２条の２」）のこともあるので、半角にそろえてから比べる
+  const normalizedText = params.scoringText.normalize('NFKC');
   for (const articleRef of articleRefs) {
-    if (params.scoringText.includes(articleRef)) {
+    if (normalizedText.includes(articleRef)) {
       signals.push({
         type: 'article_ref',
         value: articleRef,
@@ -511,14 +513,13 @@ function describeRelevance(
   return `${sourceLabel} で ${reasonParts.join(' / ')}。score=${score}`;
 }
 
+/**
+ * 通達の本文に現れる条番号の書き方。通達は漢数字（"第三十二条の二"）で書くことが多い。
+ * 数字だけ（"32"）は日付（"昭和32年"）などにも当たるので候補にしない
+ */
 function buildArticleReferenceCandidates(article: string): string[] {
-  const normalized = article.replace(/_/g, 'の').replace(/^第/, '').replace(/条$/, '');
-  const candidates = [
-    `第${normalized}条`,
-    `${normalized}条`,
-    normalized,
-  ];
-  return Array.from(new Set(candidates));
+  const label = formatArticleLabel(article);
+  return Array.from(new Set([label, label.replace(/^第/, ''), formatArticleLabel(article, { kanji: true })]));
 }
 
 function dedupeSignals(signals: MatchSignal[]): MatchSignal[] {

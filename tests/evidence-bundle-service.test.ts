@@ -579,7 +579,7 @@ describe('getEvidenceBundle', () => {
       const bundle = await getEvidenceBundle({ lawId: '322M40000100023', article: '7の2', item: '二', subitem: 'ロ (1) (iii)', includeJaish: false });
 
       expect(bundle.primary_evidence.canonical_id).toBe('egov:322M40000100023:article:7の2:paragraph:1:item:2:subitem:ロ/1/iii');
-      expect(bundle.primary_evidence.title).toBe('労働基準法施行規則 第7の2条第1項第2号ロ（1）（iii）');
+      expect(bundle.primary_evidence.title).toBe('労働基準法施行規則 第7条の2第1項第2号ロ（1）（iii）');
       expect(bundle.primary_evidence.article_locator).toEqual({
         law_id: '322M40000100023', article: '7の2', paragraph: 1, item: '二', subitem: 'ロ/1/iii',
       });
@@ -604,6 +604,42 @@ describe('getEvidenceBundle', () => {
 
     expect(vi.mocked(findRelatedSources)).toHaveBeenCalledWith({ lawId: '322AC0000000049', article: '32の2', articleCaption: '労働時間' });
     expect(bundle.primary_evidence.common_caption).toEqual({ caption: '労働時間', from_article: '32' });
+  });
+
+  describe('通達の順位づけでの条番号の照合', () => {
+    const scoreFor = async (article: string, tsutatsuTitle: string) => {
+      vi.mocked(getArticleByLawId).mockResolvedValue({
+        lawId: '322AC0000000049', lawTitle: '労働基準法',
+        lawNum: '昭和二十二年法律第四十九号', promulgationDate: '1947-04-07',
+        article, articleCaption: '', captionInText: false, text: '…',
+        egovUrl: 'https://laws.e-gov.go.jp/law/322AC0000000049',
+      } as any);
+      vi.mocked(findRelatedSources).mockResolvedValue({
+        lawId: '322AC0000000049', lawTitle: '労働基準法', delegatedLaws: [], searchKeywords: ['労働時間'], warnings: [],
+      });
+      vi.mocked(searchMhlwTsutatsu).mockResolvedValue({
+        status: 'ok', results: [{ title: tsutatsuTitle, dataId: 'x1', date: '', shubetsu: '' }],
+        totalCount: 1, page: 0, partialFailures: [], warnings: [],
+      } as any);
+      const bundle = await getEvidenceBundle({ lawId: '322AC0000000049', article, includeJaish: false });
+      return bundle.related_tsutatsu[0]?.matched_signals?.filter((s) => s.type === 'article_ref') ?? [];
+    };
+
+    it('枝番号の条は、通達の漢数字の書き方（第三十二条の二）で当たる', async () => {
+      expect(await scoreFor('32の2', '労働基準法第三十二条の二の運用について')).toHaveLength(1);
+    });
+
+    it('算用数字の書き方（第32条の2）でも当たる', async () => {
+      expect(await scoreFor('32の2', '労働基準法第32条の2に関する解釈')).toHaveLength(1);
+    });
+
+    it('全角数字の書き方（第３２条の２）でも当たる', async () => {
+      expect(await scoreFor('32の2', '労働基準法第３２条の２の適用について')).toHaveLength(1);
+    });
+
+    it('数字だけ（昭和32年）には当たらない', async () => {
+      expect(await scoreFor('32', '昭和32年の労働基準法の改正について')).toHaveLength(0);
+    });
   });
 });
 
