@@ -9,7 +9,7 @@ const inputSchema = z.object({
     '確定済みの e-Gov law_id。resolve_law または search_law の結果を指定。'
   ),
   article: z.string().min(1).max(20).optional().describe(
-    '条文番号。例: "32", "36", "32の2", "第36条"。supplementary を指定したときは省略できる'
+    '条文番号。例: "32", "36", "32の2", "第36条", "第32条の2"。supplementary を指定したときは省略できる'
   ),
   supplementary: z.string().min(1).max(60).optional().describe(
     '附則を主根拠にする。"制定" または改正法の法令番号（get_article と同じ）。改正附則では改正法の題名で関連通達（施行通達など）を探す'

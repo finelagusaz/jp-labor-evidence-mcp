@@ -61,7 +61,7 @@ describe('get_article: 附則・細分・号', () => {
     const env = await callTool<any>(server, 'get_article', { law_id: '322M40000100023', article: '7の2', paragraph: 1, item: 2, subitem: 'ロ (1) (iii)' });
     expect(env.status).toBe('ok');
     expect(env.data.subitem).toBe('ロ/1/iii');
-    expect(env.data.title).toBe('労働基準法施行規則 第7の2条第1項第2号ロ（1）（iii）');
+    expect(env.data.title).toBe('労働基準法施行規則 第7条の2第1項第2号ロ（1）（iii）');
     expect(env.data.canonical_id).toBe('egov:322M40000100023:article:7の2:paragraph:1:item:2:subitem:ロ/1/iii');
     expect(env.data.body).toMatch(/^（ｉｉｉ）/);
   });
@@ -173,6 +173,27 @@ describe('共通見出し', () => {
     const server = await connect();
     const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article: '32' });
     expect(env.data.common_caption).toBeUndefined();
+  });
+});
+
+describe('枝番号の条の書き方', () => {
+  beforeEach(() => vi.resetModules());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(['第32条の2', '32の2', '第三十二条の二'])('get_article(%s) は第32条の2 を返し、見出しと canonical_id がそろう', async (article) => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'get_article', { law_id: '322AC0000000049', article });
+    expect(env.status).toBe('ok');
+    expect(env.data.body).toContain('**第三十二条の二**');
+    expect(env.data.title).toBe('労働基準法 第32条の2');
+    expect(env.data.canonical_id).toBe('egov:322AC0000000049:article:32の2');
+  });
+
+  it('find_related_sources の検索キーワードは法令の表記（第32条の2）', async () => {
+    const server = await connect();
+    const env = await callTool<any>(server, 'find_related_sources', { law_id: '322AC0000000049', article: '32の2' });
+    expect(env.data.search_keywords).toContain('労働基準法 第32条の2');
+    expect(env.data.search_keywords.some((k: string) => k.includes('第32の2条'))).toBe(false);
   });
 });
 

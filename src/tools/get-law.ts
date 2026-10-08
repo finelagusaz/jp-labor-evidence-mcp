@@ -5,6 +5,7 @@ import { computeUpstreamHash, joinVersionInfo } from '../lib/evidence-metadata.j
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { getLawArticle, getLawToc } from '../lib/services/law-service.js';
 import { formatArticleBody } from '../lib/egov-parser.js';
+import { formatArticleLabel } from '../lib/article-locator.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
 
 const getLawInputSchema = z.object({
@@ -12,7 +13,7 @@ const getLawInputSchema = z.object({
     '法令名または略称。例: "労働基準法", "労働安全衛生法", "雇用保険法", "健康保険法", "労基法", "安衛法", "派遣法", "育介法"'
   ),
   article: z.string().min(1).max(20).optional().describe(
-    '条文番号（format="toc"の場合は省略可）。例: "32", "36", "32の2", "第36条"'
+    '条文番号（format="toc"の場合は省略可）。例: "32", "36", "32の2", "第36条", "第32条の2"'
   ),
   paragraph: z.number().int().positive().max(99).optional().describe(
     '項番号（省略時は条文全体）。例: 1, 2'
@@ -115,9 +116,7 @@ export function registerGetLawTool(server: McpServer) {
           item: args.item,
         });
 
-        // 条文番号の表示を正規化（「第XX条」形式にする。入力が既に含む場合は二重付与しない）
-        const rawArticle = args.article.replace(/_/g, 'の');
-        const articleDisplay = /^第/.test(rawArticle) ? rawArticle : `第${rawArticle}条`;
+        const articleDisplay = formatArticleLabel(args.article);
         const paraDisplay = args.paragraph ? `第${args.paragraph}項` : '';
         const itemDisplay = args.item ? `第${args.item}号` : '';
         const title = `${result.lawTitle} ${articleDisplay}${paraDisplay}${itemDisplay}`;

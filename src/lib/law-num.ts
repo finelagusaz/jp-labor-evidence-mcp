@@ -150,3 +150,20 @@ export function promulgationSortKey(parsed: ParsedLawNum): number | undefined {
   return (base + year - 1) * 10000 + parsed.month * 100 + parsed.day;
 }
 
+const KANJI_DIGITS = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+
+/**
+ * 数を法令の漢数字（十・百・千を使う形）にする。32 → 三十二、102 → 百二、1947 → 千九百四十七。
+ * 通達の条番号（「第三十二条の二」）との照合に使う。1〜9999 以外は算用数字のまま返す
+ */
+export function toKanjiNumeral(n: number): string {
+  if (!Number.isInteger(n) || n < 1 || n > 9999) return String(n);
+  let out = '';
+  for (const [unit, label] of [[1000, '千'], [100, '百'], [10, '十']] as const) {
+    const digit = Math.floor(n / unit) % 10;
+    if (digit > 0) out += `${digit === 1 ? '' : KANJI_DIGITS[digit]}${label}`;
+  }
+  const ones = n % 10;
+  return ones > 0 ? out + KANJI_DIGITS[ones] : out;
+}
+
