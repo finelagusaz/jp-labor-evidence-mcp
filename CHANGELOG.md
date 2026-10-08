@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-08
+
+### Added
+
+- `get_evidence_bundle` に `include_pending_amendments`（既定 false、`get_article` と同じ）を追加。主法令の未施行の改正を `primary_evidence.pending_amendments` に載せ、`UNENFORCED_AMENDMENT_PENDING` の警告を出す。委任先の法令（施行規則など）は確かめない
+- 確認に失敗しても主条文と関連通達は返し、`status: 'partial'`、`PENDING_AMENDMENT_CHECK_FAILED` の警告、`partial_failures` の `law_revisions:{law_id}` で知らせる
+- README の根拠セットの例に `include_pending_amendments` を追記
+
 ## [0.11.0] - 2026-10-08
 
 ### Added

@@ -1,10 +1,11 @@
 import { buildMhlwDocumentCanonicalId, buildJaishCanonicalId } from '../canonical-id.js';
 import { buildArticleCanonicalId, buildArticleTitle, formatArticleLabel, type ArticleLocatorParts } from '../article-locator.js';
 import { formatArticleBody } from '../egov-parser.js';
-import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getRevisionWarnings } from '../evidence-metadata.js';
-import type { PartialFailure, WarningMessage, RevisionMetadata } from '../types.js';
+import { computeUpstreamHash, joinVersionInfo, buildRevisionMetadata, buildVersionInfoString, getPendingAmendmentWarnings, getRevisionWarnings } from '../evidence-metadata.js';
+import type { PartialFailure, PendingAmendment, WarningMessage, RevisionMetadata } from '../types.js';
 import { failureReasonOf } from '../errors.js';
-import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, verifyLatestEnforced } from './law-service.js';
+import { observabilityRegistry } from '../observability.js';
+import { findAmendmentLawTitle, findRelatedSources, getArticleByLawId, getLawToc, getPendingAmendments, verifyLatestEnforced } from './law-service.js';
 import { searchJaishTsutatsu } from './jaish-tsutatsu-service.js';
 import { searchMhlwTsutatsu } from './mhlw-tsutatsu-service.js';
 
@@ -18,6 +19,8 @@ export interface EvidenceRecord {
   warnings: WarningMessage[];
   version_info?: string;
   revision_metadata?: RevisionMetadata;
+  /** 主法令の未施行の改正（includePendingAmendments のときだけ。施行日の昇順） */
+  pending_amendments?: PendingAmendment[];
   upstream_hash: string;
   /** 主条文が自分の見出しを持たないときの共通見出し（推論。body には含めない） */
   common_caption?: { caption: string; from_article: string };
@@ -61,6 +64,8 @@ export async function getEvidenceBundle(params: {
   item?: number | string;
   subitem?: string;
   supplementary?: string;
+  /** 主法令の未施行の改正を /law_revisions で確かめる（既定 false。get_article と同じ） */
+  includePendingAmendments?: boolean;
   relatedKeywords?: string[];
   includeJaish?: boolean;
   mhlwLimit?: number;
@@ -127,8 +132,25 @@ export async function getEvidenceBundle(params: {
     article: suppl ? undefined : params.article,
     articleCaption: suppl ? undefined : caption,
   });
-  const warnings: WarningMessage[] = [...primaryRevisionWarnings, ...related.warnings];
+  const warnings: WarningMessage[] = [...primaryRevisionWarnings];
   const partialFailures: PartialFailure[] = [];
+
+  // 未施行の改正の確認は主法令だけ。失敗しても主条文は返す（get_article と同じ扱い）
+  if (params.includePendingAmendments === true) {
+    try {
+      const built = await getPendingAmendments(primary.lawId);
+      primaryEvidence.pending_amendments = built.amendments;
+      warnings.push(...getPendingAmendmentWarnings(built, primary.lawTitle));
+    } catch (error) {
+      partialFailures.push({ source: 'egov', target: `law_revisions:${primary.lawId}`, reason: failureReasonOf(error) });
+      observabilityRegistry.recordPartialFailure('egov', 1);
+      warnings.push({
+        code: 'PENDING_AMENDMENT_CHECK_FAILED',
+        message: `${primary.lawTitle}: 未施行改正の確認に失敗しました。時間をおいて再試行してください。`,
+      });
+    }
+  }
+  warnings.push(...related.warnings);
 
   // 改正附則は改正法の題名で施行通達を探す（法令番号では厚労省の検索が当たらない）
   const amendmentKeywords: string[] = [];

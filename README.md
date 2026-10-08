@@ -170,6 +170,8 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 
 `get_evidence_bundle` は `primary_evidence` / `delegated_evidence` / `related_tsutatsu` / `warnings` / `partial_failures` / `search_keywords` を返します。
 
+`include_pending_amendments=true` を付けると、主法令の未施行の改正（施行予定日つき）も `primary_evidence.pending_amendments` に載せます（`get_article` と同じ。既定では確かめません）。委任先の法令の未施行の改正は、その law_id で `get_article` を呼んで確かめてください。
+
 ### 改正前後の比較
 
 > 旧法と新法で第32条がどう変わったか比較して
