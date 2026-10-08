@@ -10,5 +10,6 @@ describe('server instructions', () => {
     expect(instructions).toContain('freshness warnings');
     expect(instructions).toContain('BUNDLED_INDEX_AGED');
     expect(instructions).toContain('RUNTIME_INDEX_STALE');
+    expect(instructions).toContain('retryable');
   });
 });

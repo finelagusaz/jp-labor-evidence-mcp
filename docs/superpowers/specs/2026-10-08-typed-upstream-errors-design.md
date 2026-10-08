@@ -26,11 +26,13 @@
 | エラー文 | `HTTP 503 Service Unavailable — {url}` の形を保つ | 既存の表示・ログとの互換 |
 | 部分失敗の reason | `failureReasonOf(error)` で `not_found` / `upstream_unavailable` / `timeout` / `circuit_open` / `parse_error` を返し、bundle の関連取得と `get_article` の未施行改正の確認で使う | degrade reason の精度 |
 | `verify:egov` | 404 の判定を型（`NotFoundError`）で行う | 文字列の判別をやめる |
+| 404 など再試行しても無駄な 4xx の後の連続失敗の数え方 | 0 に戻す（`recordSuccess`）。503 → 503 → 404 なら、次の 503 は 1 回目として数える | 上流は応答できている。連続失敗は「上流が応答できない状態の連続」を表す |
 | サーキット開放のエラー | 失敗回数に数えない | `try` の中の再確認で投げたものまで数えると、開いている時間を延ばしてしまう |
 
 ## 3. 検証
 
 - tool の応答のテスト（`tests/upstream-errors.test.ts`）4 件は、main では赤、変更後は緑
+- 「サーキット開放のエラーを数えない」は、`try` の中の再確認（並行要求の競合時）でだけ効く。テスト（`開いている時間を延ばさない`）は見張りで、変更前のコードでも通る。根拠はコードの読み
 - live: 存在しない law_id を 4 回続けて引くと、どれも `not_found`。直後の労基法 第32条は `ok`（変更前は 3 回目でサーキットが開いていた）
 - `verify:egov`: 40 件すべて OK（404 の判定を型へ移した後も変わらない）
 
