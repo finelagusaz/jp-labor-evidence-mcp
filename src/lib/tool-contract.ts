@@ -118,7 +118,8 @@ export function mapErrorToEnvelope(error: unknown): ToolEnvelope<null> {
     return {
       status: 'unavailable',
       error_code: 'upstream_unavailable',
-      retryable: true,
+      // 5xx・タイムアウト・サーキット開放は再試行可、404 以外の 4xx は不可
+      retryable: error.retryable,
       degraded: false,
       warnings: [],
       partial_failures: [],

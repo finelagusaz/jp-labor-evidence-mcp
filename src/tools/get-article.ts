@@ -7,6 +7,7 @@ import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshnes
 import { getArticleByLawId, getPendingAmendments, verifyLatestEnforced } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope, revisionMetadataSchema, pendingAmendmentSchema } from '../lib/tool-contract.js';
 import { observabilityRegistry } from '../lib/observability.js';
+import { failureReasonOf } from '../lib/errors.js';
 import type { PendingAmendment } from '../lib/types.js';
 
 const getArticleInputSchema = z.object({
@@ -115,9 +116,9 @@ export function registerGetArticleTool(server: McpServer) {
             const built = await getPendingAmendments(result.lawId);
             pendingAmendments = built.amendments;
             warnings.push(...getPendingAmendmentWarnings(built, result.lawTitle));
-          } catch {
+          } catch (error) {
             degraded = true;
-            partialFailures.push({ source: 'egov', target: `law_revisions:${result.lawId}`, reason: 'upstream_unavailable' });
+            partialFailures.push({ source: 'egov', target: `law_revisions:${result.lawId}`, reason: failureReasonOf(error) });
             observabilityRegistry.recordPartialFailure('egov', 1);
             warnings.push({
               code: 'PENDING_AMENDMENT_CHECK_FAILED',

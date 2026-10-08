@@ -1,4 +1,5 @@
 import { observabilityRegistry } from '../observability.js';
+import { CircuitOpenError, ExternalApiError, ParseError, UpstreamHttpError, UpstreamNotFoundError, UpstreamTimeoutError } from '../errors.js';
 
 export interface HttpAdapterOptions {
   baseUrl: string;
@@ -41,7 +42,11 @@ export class HttpSourceAdapter {
 
   protected async fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     const response = await this.fetchResponse(url, init);
-    return await response.json() as T;
+    try {
+      return await response.json() as T;
+    } catch (error) {
+      throw new ParseError(`上流の応答を JSON として解釈できませんでした — ${url}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   protected async fetchArrayBuffer(url: string, init?: RequestInit): Promise<ArrayBuffer> {
@@ -70,22 +75,45 @@ export class HttpSourceAdapter {
         },
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} ${response.statusText} — ${url}`);
+        throw response.status === 404
+          ? new UpstreamNotFoundError(url, response.statusText || 'Not Found')
+          : new UpstreamHttpError(response.status, response.statusText, url);
       }
       this.recordSuccess();
       observabilityRegistry.recordUpstreamRequest(this.sourceName, Date.now() - startedAt, 'success');
       return response;
     } catch (error) {
-      this.recordFailure();
+      const typed = this.toTypedError(error, url);
+      // 再試行しても無駄な 4xx（404 など）は、上流が応答できているのでサーキットの失敗に数えない。
+      // サーキット開放のエラー自身も数えない（数えると開いている時間を延ばしてしまう）
+      if (typed instanceof CircuitOpenError) {
+        // 何もしない
+      } else if (typed instanceof ExternalApiError && typed.retryable) {
+        this.recordFailure();
+      } else if (typed instanceof UpstreamNotFoundError || typed instanceof UpstreamHttpError) {
+        this.recordSuccess();
+      }
       observabilityRegistry.recordUpstreamRequest(this.sourceName, Date.now() - startedAt, 'failure');
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (typed instanceof UpstreamTimeoutError) {
         observabilityRegistry.recordTimeout(this.sourceName);
       }
-      throw error;
+      throw typed;
     } finally {
       clearTimeout(timeout);
       this.releaseSlot();
     }
+  }
+
+  /** fetch や応答の検査で投げられた失敗を、型付きのエラーにそろえる */
+  private toTypedError(error: unknown, url: string): Error {
+    if (error instanceof ExternalApiError || error instanceof UpstreamNotFoundError) return error;
+    if (error instanceof Error && error.name === 'AbortError') {
+      return new UpstreamTimeoutError(url, this.options.timeoutMs);
+    }
+    return new ExternalApiError(
+      `上流に接続できませんでした — ${url}: ${error instanceof Error ? error.message : String(error)}`,
+      { retryable: true, cause: error },
+    );
   }
 
   private async rateLimit(): Promise<void> {
@@ -111,9 +139,7 @@ export class HttpSourceAdapter {
   private ensureCircuitClosed(): void {
     if (Date.now() < this.circuitOpenUntil) {
       observabilityRegistry.recordCircuitOpen(this.sourceName);
-      throw new Error(
-        `Circuit breaker is open for ${this.baseUrl} until ${new Date(this.circuitOpenUntil).toISOString()}`
-      );
+      throw new CircuitOpenError(this.baseUrl, new Date(this.circuitOpenUntil).toISOString());
     }
   }
 

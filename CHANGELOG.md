@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-08
+
+### Fixed
+
+- 上流の失敗が、種類にかかわらず `internal_error`・`retryable: false` で返っていた。失敗の種類ごとに型付きのエラーにし、正しい応答を返す。対象は law_id を受け取る tool（`get_article` / `get_evidence_bundle` / `diff_revision` / `find_related_sources` / `list_suppl_provisions`、deprecated の `get_law`）と通達本文の取得（`get_mhlw_tsutatsu` / `get_jaish_tsutatsu`）。通達の検索（`search_mhlw_tsutatsu` / `search_jaish_tsutatsu`）は従来どおり `unavailable` を返す
+  - 存在しない law_id など、HTTP 404 → `not_found`
+  - 一時的な障害（5xx・429・408）・タイムアウト・サーキットブレーカーの開放・接続の失敗 → `upstream_unavailable`、`retryable: true`
+  - そのほかの 4xx → `upstream_unavailable`、`retryable: false`
+  - 応答の JSON が壊れている → `parse_error`
+- 404 などの再試行しても無駄な 4xx を、サーキットブレーカーの失敗回数に数えていた。存在しない law_id を 3 回引くと、e-Gov への要求が 30 秒すべて止まっていた。上流は応答できているので数えないようにした。サーキットが開いている間の要求が、開いている時間を延ばすこともなくなった
+- 部分失敗の `reason`（`get_evidence_bundle` の関連取得、`get_article` の未施行改正の確認）を、失敗の種類（`not_found` / `upstream_unavailable` / `timeout` / `circuit_open` / `parse_error`）で返す。これまで未施行改正の確認は、失敗の種類にかかわらず `upstream_unavailable` だった
+- `verify:egov` の 404 の判定を、エラー文の正規表現ではなくエラーの型で行う
+- LLM 向けの `instructions` に、`retryable` に応じた再試行の仕方を追記
+
 ## [0.10.1] - 2026-10-08
 
 ### Fixed
