@@ -503,6 +503,7 @@ interface Evidence {
 例:
 
 - `egov:322AC0000000049:article:32`
+- `egov:322AC0000000049_20281223_508AC0000000046:article:58`（`diff_revision` で版の ID を指定した側。law_id の位置に版の ID が入る）
 - `mhlw:00tb2035:page:1`
 - `jaish:/anzen/hor/hombun/...`
 

@@ -1,15 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
-import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope } from '../lib/tool-contract.js';
+import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope, revisionMetadataSchema } from '../lib/tool-contract.js';
 import { diffRevision } from '../lib/services/diff-revision-service.js';
 
 const inputSchema = z.object({
-  base_law_id: z.string().min(1).max(20).describe(
-    '比較元の e-Gov law_id。例: "322AC0000000049"'
+  base_law_id: z.string().min(1).max(60).describe(
+    '比較元。e-Gov の law_id（現行版。例: "322AC0000000049"）か、版の ID（law_revision_id。例: "322AC0000000049_20250601_504AC0000000068"）。' +
+    '版の ID は get_article の revision_metadata.law_revision_id や pending_amendments[].law_revision_id をそのまま渡せる'
   ),
-  head_law_id: z.string().min(1).max(20).describe(
-    '比較先の e-Gov law_id。例: "347AC0000000057"'
+  head_law_id: z.string().min(1).max(60).describe(
+    '比較先。base_law_id と同じ形式。未施行の改正の版の ID を渡すと、施行後に条文がどう変わるかを比べられる'
   ),
   article: z.string().min(1).max(20).describe(
     '比較対象の条文番号。例: "32", "32の2", "第32条"'
@@ -22,6 +23,7 @@ const evidenceSchema = z.object({
   source_type: z.literal('egov'),
   canonical_id: z.string(),
   law_id: z.string(),
+  law_revision_id: z.string().optional(),
   law_title: z.string(),
   article: z.string(),
   paragraph: z.number().optional(),
@@ -31,6 +33,7 @@ const evidenceSchema = z.object({
   source_url: z.string(),
   retrieved_at: z.string(),
   version_info: z.string().optional(),
+  revision_metadata: revisionMetadataSchema.optional(),
   upstream_hash: z.string(),
 });
 
@@ -55,7 +58,7 @@ export function registerDiffRevisionTool(server: McpServer) {
   server.registerTool(
     'diff_revision',
     {
-      description: '2つの e-Gov law_id 上の同一条文を比較し、構造化 diff を返す。',
+      description: '同一法令の 2 つの版の同一条文を比較し、構造化 diff を返す。版は law_id（現行版）か law_revision_id（過去の版・未施行の版）で指定する。',
       inputSchema,
       outputSchema,
     },

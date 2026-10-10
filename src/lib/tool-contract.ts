@@ -27,6 +27,8 @@ export const revisionMetadataSchema = z.object({
   law_revision_id: z.string().optional(),
   current_enforcement_date: z.string().optional(),
   current_enforcement_date_wareki: z.string().optional().describe('current_enforcement_date の和暦（例: 令和8年6月24日）'),
+  scheduled_enforcement_date: z.string().optional().describe('未施行の版（current_revision_status が UnEnforced）の施行予定日。diff_revision で版を指定したときに入る'),
+  scheduled_enforcement_date_wareki: z.string().optional().describe('scheduled_enforcement_date の和暦'),
   enforcement_note: z.string().optional(),
   amendment_law_num: z.string().optional(),
   amendment_law_title: z.string().optional(),

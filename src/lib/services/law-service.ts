@@ -33,6 +33,8 @@ export interface GetLawArticleResult {
   commonCaption?: { caption: string; fromArticle: string };
   egovUrl: string;
   revisionInfo?: EgovRevisionInfo;
+  /** 版の ID（law_revision_id）で指定されたときだけ。lawId は版の ID から取り出した law_id */
+  lawRevisionId?: string;
   /** 指定された項、または item から特定した項 */
   paragraph?: number;
   /** 細分の正規形（"ロ/1/iii"） */
@@ -169,8 +171,8 @@ export async function getLawArticle(params: {
     return cached;
   }
 
-  const { data, lawId, lawTitle } = await fetchLawData(params.lawName);
-  const egovUrl = getEgovUrl(lawId);
+  const { data, lawId, lawTitle, lawRevisionId } = await fetchLawData(params.lawName);
+  const egovUrl = getEgovUrl(lawId, lawRevisionId);
   const target = { article, paragraph: params.paragraph, item: params.item, subitem: params.subitem };
 
   let suppl: SupplProvisionInfo | null = null;
@@ -210,6 +212,7 @@ export async function getLawArticle(params: {
     commonCaption: result.commonCaption,
     egovUrl,
     revisionInfo: data.revision_info,
+    lawRevisionId,
     paragraph: params.paragraph ?? result.matchedParagraph,
     subitem: subitemPath?.join('/'),
     supplementary: suppl ? { key: suppl.key, amendLawNum: suppl.amendLawNum, extract: suppl.extract } : undefined,

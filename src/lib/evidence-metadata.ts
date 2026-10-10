@@ -50,10 +50,13 @@ export function buildRevisionMetadata(
   if (!revisionInfo) return undefined;
   const lawRevisionId = cleanValue(revisionInfo.law_revision_id);
   const enforcementDate = cleanValue(revisionInfo.amendment_enforcement_date);
+  const scheduledDate = scheduledEnforcementDateOf(revisionInfo);
   const metadata: RevisionMetadata = {
     law_revision_id: lawRevisionId,
     current_enforcement_date: enforcementDate,
     current_enforcement_date_wareki: enforcementDate && toWarekiDate(enforcementDate),
+    scheduled_enforcement_date: scheduledDate,
+    scheduled_enforcement_date_wareki: scheduledDate && toWarekiDate(scheduledDate),
     enforcement_note: cleanValue(revisionInfo.amendment_enforcement_comment),
     amendment_law_num: cleanValue(revisionInfo.amendment_law_num),
     amendment_law_title: cleanValue(revisionInfo.amendment_law_title),
@@ -67,24 +70,43 @@ export function buildRevisionMetadata(
 }
 
 /**
+ * 未施行の版の施行予定日。e-Gov は未施行の版の amendment_enforcement_date を null にし、
+ * 予定日を amendment_scheduled_enforcement_date にだけ入れる。
+ * 施行済みの版の scheduled は「その版を生んだ改正の暫定施行日」で前方参照ではないので使わない
+ */
+function scheduledEnforcementDateOf(revisionInfo: EgovRevisionInfo | undefined): string | undefined {
+  if (cleanValue(revisionInfo?.current_revision_status) !== 'UnEnforced') return undefined;
+  return cleanValue(revisionInfo?.amendment_scheduled_enforcement_date);
+}
+
+/**
  * 人間可読 version_info を組む。既存 base（法令番号 / 公布日）を変えず、
- * 現行版の施行日セグメント＋誤帰属 hedge を append する。改正法名は載せない。
+ * 施行日セグメント＋誤帰属 hedge を append する。改正法名は載せない。
  * revision または施行日が無ければ base のみへ graceful degrade。純粋関数。
+ * options.pinned: 版の ID で指定した版（diff_revision）。「現行版」ではなく「この版」と書き、
+ * 未施行の版では施行予定日を書く
  */
 export function buildVersionInfoString(
   lawNum: string | undefined,
   promulgationDate: string | undefined,
   revisionInfo?: EgovRevisionInfo,
+  options: { pinned?: boolean } = {},
 ): string | undefined {
   const promulgation = cleanValue(promulgationDate);
   const base = joinVersionInfo([lawNum, promulgation && withWareki(promulgation)]);
   const enforcementDate = cleanValue(revisionInfo?.amendment_enforcement_date);
-  if (!enforcementDate) return base;
+  const scheduledDate = options.pinned ? scheduledEnforcementDateOf(revisionInfo) : undefined;
+  const date = enforcementDate ?? scheduledDate;
+  if (!date) return base;
   const note = cleanValue(revisionInfo?.amendment_enforcement_comment);
   const noteSuffix = note ? `（施行期日規定: ${note}）` : '';
+  const version = options.pinned ? 'この版' : '現行版';
+  // 未施行の版は施行日の項目に日付が入っていることもある（e-Gov の版により異なる）。どちらでも予定日として書く
+  const unenforced = cleanValue(revisionInfo?.current_revision_status) === 'UnEnforced';
+  const kind = unenforced || !enforcementDate ? '施行予定日' : '施行日';
   const segment =
-    `現行版の施行日 ${withWareki(enforcementDate)}${noteSuffix}　` +
-    '※この施行日は法令全体の現行版を指し、引用した条文が改正されたとは限りません';
+    `${version}の${kind} ${withWareki(date)}${noteSuffix}　` +
+    `※この${kind}は法令全体の${version}を指し、引用した条文が改正されたとは限りません`;
   return joinVersionInfo([base, segment]);
 }
 

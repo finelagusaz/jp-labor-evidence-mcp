@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/lib/services/law-service.js', () => ({
   getArticleByLawId: vi.fn(),
+  verifyLatestEnforced: vi.fn().mockResolvedValue(false),
 }));
 
 import { getArticleByLawId } from '../src/lib/services/law-service.js';
@@ -79,6 +80,18 @@ describe('diffRevision', () => {
       headLawId: 'head-law',
       article: '32',
     })).rejects.toThrow('同一法令の改正前後比較のみ対応');
+  });
+
+  it('題名が改正で変わっていても、law_id が同じなら同じ法令として比べる', async () => {
+    const article = {
+      lawId: '403AC0000000076', lawNum: '平成三年法律第七十六号', promulgationDate: '1991-05-15',
+      article: '1', articleCaption: '', text: '目的', egovUrl: 'https://laws.e-gov.go.jp/law/403AC0000000076',
+    };
+    vi.mocked(getArticleByLawId)
+      .mockResolvedValueOnce({ ...article, lawTitle: '育児休業等に関する法律' })
+      .mockResolvedValueOnce({ ...article, lawTitle: '育児休業、介護休業等育児又は家族介護を行う労働者の福祉に関する法律' });
+    const result = await diffRevision({ baseLawId: '403AC0000000076_19920401_000000000000000', headLawId: '403AC0000000076', article: '1' });
+    expect(result.status).toBe('ok');
   });
 
   it('paragraph を省いた号が改正前後で別の項に解決されたら DIFF_PARAGRAPH_MISMATCH を出し、canonical_id に各々の項を含める', async () => {

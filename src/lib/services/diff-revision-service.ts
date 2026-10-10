@@ -1,7 +1,7 @@
-import { computeUpstreamHash, joinVersionInfo } from '../evidence-metadata.js';
+import { buildRevisionMetadata, buildVersionInfoString, computeUpstreamHash, getRevisionWarnings } from '../evidence-metadata.js';
 import { ValidationError } from '../errors.js';
-import type { WarningMessage } from '../types.js';
-import { getArticleByLawId } from './law-service.js';
+import type { RevisionMetadata, WarningMessage } from '../types.js';
+import { getArticleByLawId, verifyLatestEnforced } from './law-service.js';
 import { formatArticleBody } from '../egov-parser.js';
 import { buildArticleCanonicalId, buildArticleTitle } from '../article-locator.js';
 
@@ -9,6 +9,8 @@ export interface DiffEvidenceRecord {
   source_type: 'egov';
   canonical_id: string;
   law_id: string;
+  /** 版の ID（law_revision_id）で指定した側だけ */
+  law_revision_id?: string;
   law_title: string;
   article: string;
   paragraph?: number;
@@ -18,6 +20,7 @@ export interface DiffEvidenceRecord {
   source_url: string;
   retrieved_at: string;
   version_info?: string;
+  revision_metadata?: RevisionMetadata;
   upstream_hash: string;
 }
 
@@ -64,18 +67,27 @@ export async function diffRevision(params: {
     }),
   ]);
 
-  const retrievedAt = new Date().toISOString();
-  const baseEvidence = buildDiffEvidenceRecord(baseArticle, params.article, params.paragraph, params.item, retrievedAt);
-  const headEvidence = buildDiffEvidenceRecord(headArticle, params.article, params.paragraph, params.item, retrievedAt);
-
-  if (baseEvidence.law_title !== headEvidence.law_title) {
+  // 題名は改正で変わりうるので、同じ法令かは law_id で判定する（題名の一致も従来どおり認める）
+  if (baseArticle.lawId !== headArticle.lawId && baseArticle.lawTitle !== headArticle.lawTitle) {
     throw new ValidationError(
-      `diff_revision は同一法令の改正前後比較のみ対応です: ${baseEvidence.law_title} / ${headEvidence.law_title}`
+      `diff_revision は同一法令の改正前後比較のみ対応です: ${baseArticle.lawTitle} / ${headArticle.lawTitle}`
     );
   }
 
+  const [baseVerified, headVerified] = await Promise.all([
+    verifyLatestEnforced(baseArticle.lawId, baseArticle.revisionInfo),
+    verifyLatestEnforced(headArticle.lawId, headArticle.revisionInfo),
+  ]);
+  const retrievedAt = new Date().toISOString();
+  const baseEvidence = buildDiffEvidenceRecord(baseArticle, params.article, params.paragraph, params.item, retrievedAt, baseVerified);
+  const headEvidence = buildDiffEvidenceRecord(headArticle, params.article, params.paragraph, params.item, retrievedAt, headVerified);
+
   const diffChunks = computeDiffChunks(baseEvidence.body, headEvidence.body);
-  const warnings: WarningMessage[] = [];
+  // 両側とも同じ法令名で始まるので、どちらの側の警告かを前に付ける
+  const warnings: WarningMessage[] = [
+    ...sideWarnings('比較元', baseArticle, baseVerified),
+    ...sideWarnings('比較先', headArticle, headVerified),
+  ];
   if (baseEvidence.paragraph !== headEvidence.paragraph) {
     warnings.push({
       code: 'DIFF_PARAGRAPH_MISMATCH',
@@ -98,23 +110,34 @@ export async function diffRevision(params: {
   };
 }
 
+type FetchedArticle = Awaited<ReturnType<typeof getArticleByLawId>>;
+
+function sideWarnings(side: string, article: FetchedArticle, latestEnforcedVerified: boolean): WarningMessage[] {
+  return getRevisionWarnings(article.revisionInfo, article.lawTitle, { latestEnforcedVerified })
+    .map((warning) => ({ ...warning, message: `${side}: ${warning.message}` }));
+}
+
 function buildDiffEvidenceRecord(
-  article: Awaited<ReturnType<typeof getArticleByLawId>>,
+  article: FetchedArticle,
   rawArticle: string,
   paragraph: number | undefined,
   item: number | undefined,
   retrievedAt: string,
+  latestEnforcedVerified: boolean,
 ): DiffEvidenceRecord {
   // paragraph を省いた号は版ごとに項を特定するので、特定した項を使う
   const resolvedParagraph = article.paragraph ?? paragraph;
   const locator = { article: rawArticle, paragraph: resolvedParagraph, item };
   const title = buildArticleTitle(article.lawTitle, locator);
   const body = formatArticleBody(article);
+  const pinned = article.lawRevisionId !== undefined;
 
   return {
     source_type: 'egov',
-    canonical_id: buildArticleCanonicalId(article.lawId, locator),
+    // 版を指定した側は、同じ条の別の版と区別できるよう版の ID で識別する
+    canonical_id: buildArticleCanonicalId(article.lawRevisionId ?? article.lawId, locator),
     law_id: article.lawId,
+    law_revision_id: article.lawRevisionId,
     law_title: article.lawTitle,
     article: rawArticle,
     paragraph: resolvedParagraph,
@@ -123,7 +146,8 @@ function buildDiffEvidenceRecord(
     body,
     source_url: article.egovUrl,
     retrieved_at: retrievedAt,
-    version_info: joinVersionInfo([article.lawNum, article.promulgationDate]),
+    version_info: buildVersionInfoString(article.lawNum, article.promulgationDate, article.revisionInfo, { pinned }),
+    revision_metadata: buildRevisionMetadata(article.revisionInfo, { latestEnforcedVerified }),
     upstream_hash: computeUpstreamHash([article.lawId, title, body, article.egovUrl]),
   };
 }

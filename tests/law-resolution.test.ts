@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchLawData } from '../src/lib/egov-client.js';
-import { LAW_ID_MAP, isEgovLawId, resolveLawCandidates, resolveLawNameStrict } from '../src/lib/law-registry.js';
+import { LAW_ID_MAP, isEgovLawId, parseEgovLawRevisionId, resolveLawCandidates, resolveLawNameStrict } from '../src/lib/law-registry.js';
 import { ValidationError } from '../src/lib/errors.js';
 
 describe('law resolution', () => {
@@ -53,6 +53,23 @@ describe('law resolution', () => {
       '%s は law_id と判定しない',
       (input) => {
         expect(isEgovLawId(input)).toBe(false);
+      }
+    );
+  });
+
+  describe('parseEgovLawRevisionId', () => {
+    it.each([
+      ['322AC0000000049_20250601_504AC0000000068', '322AC0000000049', '20250601', '504AC0000000068'],
+      ['322M40000100023_20270401_508M60000100089', '322M40000100023', '20270401', '508M60000100089'],
+    ])('%s を law_id・日付・改正法 ID に分ける', (id, lawId, date, amendmentLawId) => {
+      expect(parseEgovLawRevisionId(id)).toEqual({ lawRevisionId: id, lawId, date, amendmentLawId });
+    });
+
+    it.each(['322AC0000000049', '322AC0000000049_2025060_504AC0000000068', '322AC0000000049_20250601', '労働基準法'])(
+      '%s は版の ID と判定しない',
+      (input) => {
+        expect(parseEgovLawRevisionId(input)).toBeUndefined();
+        expect(isEgovLawId(input) && parseEgovLawRevisionId(input) !== undefined).toBe(false);
       }
     );
   });

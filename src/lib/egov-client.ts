@@ -4,7 +4,7 @@
  */
 
 import type { EgovLawSearchResult, EgovLawData, EgovLawRevisionsResponse } from './types.js';
-import { isEgovLawId, resolveLawNameStrict } from './law-registry.js';
+import { isEgovLawId, parseEgovLawRevisionId, resolveLawNameStrict } from './law-registry.js';
 import { extractLawTitle } from './egov-parser.js';
 import { ValidationError } from './errors.js';
 import { egovSourceAdapter } from './source-adapters/egov-source-adapter.js';
@@ -16,10 +16,24 @@ export async function fetchLawData(lawNameOrId: string): Promise<{
   data: EgovLawData;
   lawId: string;
   lawTitle: string;
+  /** 版の ID（law_revision_id）で指定されたときだけ */
+  lawRevisionId?: string;
 }> {
   const trimmed = lawNameOrId.trim();
   if (!trimmed) {
     throw new ValidationError('法令名または law_id を指定してください。');
+  }
+
+  // 版の ID なら、その版を取る。law_id は版の ID から取り出したものを使う
+  const revision = parseEgovLawRevisionId(trimmed);
+  if (revision) {
+    const data = await egovSourceAdapter.fetchLawDataById(revision.lawRevisionId);
+    return {
+      data,
+      lawId: revision.lawId,
+      lawTitle: extractLawTitle(data) || revision.lawId,
+      lawRevisionId: revision.lawRevisionId,
+    };
   }
 
   let lawId: string;
@@ -73,6 +87,10 @@ export async function fetchLawRevisions(lawId: string): Promise<EgovLawRevisions
 /**
  * e-Gov の法令ページURLを生成
  */
-export function getEgovUrl(lawId: string): string {
-  return `https://laws.e-gov.go.jp/law/${lawId}`;
+export function getEgovUrl(lawId: string, lawRevisionId?: string): string {
+  // 版のページは /law/{law_id}/{施行日}_{改正法 ID}（2026-10-08 にブラウザで、未施行の版の URL が現行版と違うその版の本文を出すことを確認）
+  const revision = lawRevisionId ? parseEgovLawRevisionId(lawRevisionId) : undefined;
+  return revision
+    ? `https://laws.e-gov.go.jp/law/${revision.lawId}/${revision.date}_${revision.amendmentLawId}`
+    : `https://laws.e-gov.go.jp/law/${lawId}`;
 }
