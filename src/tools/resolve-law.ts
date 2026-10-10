@@ -4,6 +4,8 @@ import { buildEgovLawCanonicalId } from '../lib/canonical-id.js';
 import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshness-warnings.js';
 import { resolveLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
+import { toWarekiDate } from '../lib/wareki.js';
+import { repealNote } from './search-law.js';
 
 const resolveLawInputSchema = z.object({
   query: z.string().min(1).max(200).describe(
@@ -26,6 +28,9 @@ const resolveLawOutputSchema = createToolEnvelopeSchema(
       law_type: z.string(),
       aliases: z.array(z.string()),
       source_url: z.string(),
+      repeal_status: z.string().optional().describe('廃止・失効した法令のときだけ（Repeal / Expire / LossOfEffectiveness など）。e-Gov 検索で補完した候補にだけ付く'),
+      repeal_date: z.string().optional(),
+      repeal_date_wareki: z.string().optional(),
     })),
   })
 );
@@ -66,6 +71,9 @@ export function registerResolveLawTool(server: McpServer) {
               law_type: candidate.lawType,
               aliases: candidate.aliases,
               source_url: candidate.sourceUrl,
+              repeal_status: candidate.repealStatus,
+              repeal_date: candidate.repealDate,
+              repeal_date_wareki: candidate.repealDate && toWarekiDate(candidate.repealDate),
             })),
           },
         };
@@ -83,7 +91,7 @@ export function registerResolveLawTool(server: McpServer) {
         }
 
         const lines = result.candidates.map((candidate, index) =>
-          `${index + 1}. **${candidate.lawTitle}**\n   law_id: ${candidate.lawId}\n   種別: ${candidate.lawType}\n   別名: ${candidate.aliases.join('、') || 'なし'}\n   URL: ${candidate.sourceUrl}`
+          `${index + 1}. **${candidate.lawTitle}**${repealNote(candidate.repealStatus, candidate.repealDate)}\n   law_id: ${candidate.lawId}\n   種別: ${candidate.lawType}\n   別名: ${candidate.aliases.join('、') || 'なし'}\n   URL: ${candidate.sourceUrl}`
         );
 
         return createToolResult(

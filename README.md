@@ -293,6 +293,7 @@ npm run sync:indexes:incremental
 - `stale_but_usable` は stale index を使っているので、上位クライアント側で注意表示した方がよい
 - 内蔵法令／通達インデックスが古い場合、tool response の `warnings[]` と起動時ログに freshness 警告が出る。意図的に古い bundle を使う場合（過去事案の再現調査、バージョン固定の回帰環境、オフライン長期運用など）は `LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS=1` で抑止できる
 - `diff_revision` で比べられる版、`get_article` などで指定できる版は e-Gov の法令履歴（`/law_revisions`）にあるものに限られる（多くの法令で 2016 年ごろ以降）
+- 廃止・失効した法令は、`resolve_law` / `search_law` の候補に `repeal_status` が付く。同じ題名の現行の法令が 1 つあれば `resolve_law` はそちらに解決する。廃止された法令の条文は廃止時点のもので、`version_info` に廃止日、警告に廃止した法令（後継の法令とは限らない）が載る
 - 判例・裁判例は対象外
 
 ## 出典

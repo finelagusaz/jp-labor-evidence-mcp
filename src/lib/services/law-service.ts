@@ -10,6 +10,7 @@ import { extractArticle, extractSupplProvision, extractToc, listSupplProvisions,
 import { lawNumMatches, parseLawNum, promulgationSortKey } from '../law-num.js';
 import { articleKeyOf, formatArticleLabel } from '../article-locator.js';
 import { NotFoundError, ValidationError } from '../errors.js';
+import { withWareki } from '../wareki.js';
 import { getEgovIndexMeta, resolveLawFromEgovIndex, searchEgovIndex } from '../indexes/egov-index.js';
 import { indexMetadataRegistry } from '../indexes/index-metadata.js';
 import type { IndexSnapshotMeta } from '../indexes/types.js';
@@ -89,6 +90,9 @@ export interface SearchLawResultItem {
   lawNum: string;
   lawType: string;
   egovUrl: string;
+  /** e-Gov 検索の結果が廃止・失効しているときだけ */
+  repealStatus?: string;
+  repealDate?: string;
 }
 
 export interface SearchLawResult {
@@ -371,19 +375,27 @@ export async function searchLaw(params: {
   }
 
   const results = await searchLaws(params.keyword, limit, params.lawType);
+  const items = results.map((r: EgovLawSearchResult) => ({
+    lawTitle: r.revision_info?.law_title ?? r.current_revision_info?.law_title ?? '',
+    lawId: r.law_info.law_id,
+    lawNum: r.law_info.law_num,
+    lawType: r.law_info.law_type,
+    egovUrl: getEgovUrl(r.law_info.law_id),
+    ...repealOf(r),
+  }));
+  const repealedCount = items.filter((item) => item.repealStatus !== undefined).length;
 
   const payload = {
     keyword: params.keyword,
-    results: results.map((r: EgovLawSearchResult) => ({
-      lawTitle: r.revision_info?.law_title ?? r.current_revision_info?.law_title ?? '',
-      lawId: r.law_info.law_id,
-      lawNum: r.law_info.law_num,
-      lawType: r.law_info.law_type,
-      egovUrl: getEgovUrl(r.law_info.law_id),
-    })),
+    results: items,
     usedIndex: false,
     indexMeta,
-    warnings: routing.warnings,
+    warnings: repealedCount > 0
+      ? [...routing.warnings, {
+          code: 'REPEALED_LAW_IN_RESULTS',
+          message: `検索結果に廃止・失効した法令が ${repealedCount} 件含まれています（repeal_status のある結果）。同じ題名の現行の法令があれば、そちらを使ってください。`,
+        }]
+      : routing.warnings,
     route: routing.route,
   };
   lawSearchNormalizedCache.set(cacheKey, payload);
@@ -433,18 +445,33 @@ export async function resolveLaw(params: {
           result.revision_info?.abbrev,
           result.current_revision_info?.abbrev,
         ].filter((value): value is string => Boolean(value)),
+        ...repealOf(result),
       } satisfies LawRegistryCandidate;
     });
 
   if (exactMatches.length > 0) {
+    // 廃止された旧法と同じ題名の新法がある（日本学術会議法など）。現行の候補が 1 つならそれに解決し、廃止された候補は後ろに残す
+    const active = exactMatches.filter((c) => c.repealStatus === undefined);
+    const repealed = exactMatches.filter((c) => c.repealStatus !== undefined);
+    const resolvedToActive = repealed.length > 0 && active.length === 1;
+    const warnings: WarningMessage[] = [{
+      code: 'UPSTREAM_EXACT_MATCH',
+      message: '内部 registry に未登録のため、e-Gov 検索結果の厳密一致から候補を補完しました。',
+    }];
+    if (repealed.length > 0) {
+      const described = repealed.map((c) =>
+        `候補の ${c.lawId}「${c.lawTitle}」は${repealLabelOf(c.repealStatus!).label}法令です。${c.repealDate ? `${repealLabelOf(c.repealStatus!).dateLabel}は ${withWareki(c.repealDate)}です。` : ''}`,
+      ).join('');
+      const guidance = resolvedToActive
+        ? `現行の ${active[0].lawId} に解決しました。廃止前の条文が必要なときは、廃止された候補の law_id を get_article に渡してください。`
+        : '';
+      warnings.push({ code: 'REPEALED_LAW_CANDIDATE', message: described + guidance });
+    }
     return {
       query,
-      resolution: exactMatches.length === 1 ? 'resolved' : 'ambiguous',
-      candidates: exactMatches,
-      warnings: [{
-        code: 'UPSTREAM_EXACT_MATCH',
-        message: '内部 registry に未登録のため、e-Gov 検索結果の厳密一致から候補を補完しました。',
-      }],
+      resolution: exactMatches.length === 1 || resolvedToActive ? 'resolved' : 'ambiguous',
+      candidates: [...active, ...repealed],
+      warnings,
       usedIndex: false,
       indexMeta: getEgovIndexMeta(),
     };
@@ -458,6 +485,25 @@ export async function resolveLaw(params: {
     usedIndex: true,
     indexMeta: getEgovIndexMeta(),
   };
+}
+
+/**
+ * e-Gov 検索の結果の廃止・失効の状態。現在の状態（current_revision_info）を優先する。
+ * repeal_status が None・空なら何も返さない
+ */
+function repealOf(result: EgovLawSearchResult): { repealStatus?: string; repealDate?: string } {
+  const info = result.current_revision_info ?? result.revision_info;
+  const status = info?.repeal_status?.trim();
+  if (!status || status === 'None') return {};
+  const date = info?.repeal_date?.trim();
+  return { repealStatus: status, repealDate: date || undefined };
+}
+
+function repealLabelOf(repealStatus: string): { label: string; dateLabel: string } {
+  if (repealStatus === 'Expire') return { label: '失効した', dateLabel: '失効日' };
+  if (repealStatus === 'LossOfEffectiveness') return { label: '効力を失った', dateLabel: '効力を失った日' };
+  if (repealStatus === 'Suspend') return { label: '効力が停止された', dateLabel: '停止の日' };
+  return { label: '廃止された', dateLabel: '廃止日' };
 }
 
 export async function getArticleByLawId(params: {

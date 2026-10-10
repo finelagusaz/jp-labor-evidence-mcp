@@ -34,6 +34,9 @@ export const revisionMetadataSchema = z.object({
   amendment_law_title: z.string().optional(),
   current_revision_status: z.string().optional(),
   repeal_status: z.string().optional(),
+  repeal_date: z.string().optional().describe('廃止・失効の日（repeal_status が None 以外のとき）'),
+  repeal_date_wareki: z.string().optional().describe('repeal_date の和暦'),
+  amendment_law_id: z.string().optional().describe('この版を生んだ改正法の ID。廃止された法令では廃止した法令の ID（後継の法令とは限らず、e-Gov API に本文が無いこともある）'),
   version_pinned_url: z.string().optional(),
   latest_enforced_verified: z.literal(true).optional().describe(
     'current_revision_status が PreviousEnforced でも、e-Gov /law_revisions との照合で施行済みの最新版と確認できた場合のみ true。' +

@@ -143,6 +143,9 @@ export interface LawRegistryCandidate {
   lawType: string;
   sourceUrl: string;
   aliases: string[];
+  /** e-Gov 検索で補完した候補が廃止・失効しているとき（repeal_status が None 以外）だけ */
+  repealStatus?: string;
+  repealDate?: string;
 }
 
 /**
