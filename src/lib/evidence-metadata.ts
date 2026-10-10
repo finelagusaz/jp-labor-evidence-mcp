@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { EgovRevisionInfo, PendingAmendment, RevisionMetadata, WarningMessage } from './types.js';
 import { toJstDateString } from './indexes/time.js';
 import { toWarekiDate, withWareki } from './wareki.js';
+import { parseEgovLawRevisionId } from './law-registry.js';
 
 export function computeUpstreamHash(parts: string[]): string {
   const hash = createHash('sha256');
@@ -215,6 +216,7 @@ export function buildPendingAmendments(
       version_pinned_url: buildVersionPinnedUrl(rev.law_revision_id),
       enforcement_note: cleanValue(rev.amendment_enforcement_comment),
       repeal_status: cleanValue(rev.repeal_status),
+      amendment_law_id: amendmentLawIdOf(rev),
     });
   }
   amendments.sort((a, b) => {
@@ -225,7 +227,34 @@ export function buildPendingAmendments(
     const rb = b.law_revision_id ?? '';
     return ra < rb ? -1 : ra > rb ? 1 : 0;
   });
-  return { amendments, excludedCount };
+  return { amendments: withPhases(amendments), excludedCount };
+}
+
+/** 改正法の law_id。/law_revisions の amendment_law_id を使い、無ければ版の ID の末尾 15 文字から読む */
+function amendmentLawIdOf(rev: EgovRevisionInfo): string | undefined {
+  const id = cleanValue(rev.amendment_law_id);
+  if (id) return id;
+  const revisionId = cleanValue(rev.law_revision_id);
+  return revisionId ? parseEgovLawRevisionId(revisionId)?.amendmentLawId : undefined;
+}
+
+/**
+ * 同じ改正法の未施行の版が複数ある（段階施行）とき、施行予定日の早い順に phase / phase_count を付ける。
+ * amendments は施行予定日の昇順で受け取る。改正法の分からない版はまとめない
+ */
+function withPhases(amendments: PendingAmendment[]): PendingAmendment[] {
+  const counts = new Map<string, number>();
+  for (const a of amendments) {
+    if (a.amendment_law_id) counts.set(a.amendment_law_id, (counts.get(a.amendment_law_id) ?? 0) + 1);
+  }
+  const seen = new Map<string, number>();
+  return amendments.map((a) => {
+    const count = a.amendment_law_id ? counts.get(a.amendment_law_id)! : 1;
+    if (count < 2) return a;
+    const phase = (seen.get(a.amendment_law_id!) ?? 0) + 1;
+    seen.set(a.amendment_law_id!, phase);
+    return { ...a, phase, phase_count: count };
+  });
 }
 
 /**
@@ -248,8 +277,12 @@ export function getPendingAmendmentWarnings(
       (min, a) => (a.enforcement_date < min ? a.enforcement_date : min),
       amendments[0].enforcement_date,
     );
+    // 段階施行（同じ改正法の版が複数）があれば改正法の本数を添える。改正法の分からない版は 1 本と数える
+    const amendOnly = amendments.filter((a) => a.repeal_status === undefined || a.repeal_status === 'None');
+    const lawCount = new Set(amendOnly.map((a, i) => a.amendment_law_id ?? `#${i}`)).size;
+    const lawNote = lawCount < amendCount ? `（改正法 ${lawCount} 本。段階施行を含む）` : '';
     const parts: string[] = [];
-    if (amendCount > 0) parts.push(`未施行の改正が ${amendCount} 件`);
+    if (amendCount > 0) parts.push(`未施行の改正が ${amendCount} 件${lawNote}`);
     if (repealCount > 0) parts.push(`廃止予定が ${repealCount} 件`);
     warnings.push({
       code: 'UNENFORCED_AMENDMENT_PENDING',

@@ -83,6 +83,11 @@ export interface PendingAmendment {
   version_pinned_url?: string;
   enforcement_note?: string;      // = amendment_enforcement_comment
   repeal_status?: string;
+  /** 改正法の ID（amendment_law_id。無ければ版の ID の末尾から）。一部改正法の本文は e-Gov API に無い */
+  amendment_law_id?: string;
+  /** 同じ改正法の未施行の版が複数あるとき（段階施行）だけ: 施行予定日の早い順で何期目か */
+  phase?: number;
+  phase_count?: number;
 }
 
 export interface EgovNode {

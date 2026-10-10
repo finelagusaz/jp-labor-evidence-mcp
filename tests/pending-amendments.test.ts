@@ -63,6 +63,36 @@ describe('buildPendingAmendments', () => {
     expect(JSON.stringify(input)).toBe(snapshot); // 入力不変
   });
 
+  it('改正法ごとにまとめ、段階施行には何期目かを付ける', () => {
+    const built = buildPendingAmendments([
+      rev({ law_revision_id: 'L_20290401_507AC0000000074', amendment_law_id: '507AC0000000074', amendment_enforcement_date: '2029-04-01', current_revision_status: 'UnEnforced' }),
+      rev({ law_revision_id: 'L_20270401_508AC0000000051', amendment_law_id: '508AC0000000051', amendment_enforcement_date: '2027-04-01', current_revision_status: 'UnEnforced' }),
+      rev({ law_revision_id: 'L_20261201_507AC0000000074', amendment_law_id: '507AC0000000074', amendment_enforcement_date: '2026-12-01', current_revision_status: 'UnEnforced' }),
+      rev({ law_revision_id: 'L_20280401_507AC0000000074', amendment_law_id: '507AC0000000074', amendment_enforcement_date: '2028-04-01', current_revision_status: 'UnEnforced' }),
+    ]);
+    expect(built.amendments.map((a) => [a.enforcement_date, a.amendment_law_id, a.phase, a.phase_count])).toEqual([
+      ['2026-12-01', '507AC0000000074', 1, 3],
+      ['2027-04-01', '508AC0000000051', undefined, undefined],
+      ['2028-04-01', '507AC0000000074', 2, 3],
+      ['2029-04-01', '507AC0000000074', 3, 3],
+    ]);
+  });
+
+  it('amendment_law_id が無ければ版の ID から改正法を読み取る。どちらも無ければまとめない', () => {
+    const built = buildPendingAmendments([
+      rev({ law_revision_id: '322AC0000000049_20270401_508AC0000000046', amendment_enforcement_date: '2027-04-01', current_revision_status: 'UnEnforced' }),
+      rev({ law_revision_id: '322AC0000000049_20281223_508AC0000000046', amendment_enforcement_date: '2028-12-23', current_revision_status: 'UnEnforced' }),
+      rev({ law_revision_id: 'L_x', amendment_enforcement_date: '2027-05-01', current_revision_status: 'UnEnforced' }),
+      rev({ law_revision_id: 'L_y', amendment_enforcement_date: '2027-06-01', current_revision_status: 'UnEnforced' }),
+    ]);
+    expect(built.amendments.map((a) => [a.amendment_law_id, a.phase, a.phase_count])).toEqual([
+      ['508AC0000000046', 1, 2],
+      [undefined, undefined, undefined],
+      [undefined, undefined, undefined],
+      ['508AC0000000046', 2, 2],
+    ]);
+  });
+
   it('undefined / UnEnforced なし → 空', () => {
     expect(buildPendingAmendments(undefined)).toEqual({ amendments: [], excludedCount: 0 });
     expect(buildPendingAmendments([rev({ current_revision_status: 'CurrentEnforced' })])).toEqual({ amendments: [], excludedCount: 0 });
@@ -86,6 +116,26 @@ describe('getPendingAmendmentWarnings', () => {
     expect(w[0].message).toContain('最も近い施行予定日は 2027-04-01（令和9年4月1日）です。'); // 未ソート入力でも min
     expect(w[0].message).toContain('改正対象に含まれるとは限りません'); // hedge
     expect(w[0].message).not.toContain('法律第'); // 改正法名を列挙しない
+  });
+
+  it('段階施行があれば改正法の本数を添える', () => {
+    const w = getPendingAmendmentWarnings({
+      amendments: [
+        pa({ enforcement_date: '2027-04-01', amendment_law_id: 'A', phase: 1, phase_count: 2 }),
+        pa({ enforcement_date: '2028-04-01', amendment_law_id: 'A', phase: 2, phase_count: 2 }),
+        pa({ enforcement_date: '2029-04-01', amendment_law_id: 'B' }),
+      ],
+      excludedCount: 0,
+    }, '健康保険法');
+    expect(w[0].message).toContain('未施行の改正が 3 件（改正法 2 本。段階施行を含む）予定されています');
+  });
+
+  it('改正法が 1 件ずつなら本数を添えない', () => {
+    const w = getPendingAmendmentWarnings({
+      amendments: [pa({ enforcement_date: '2027-04-01', amendment_law_id: 'A' }), pa({ enforcement_date: '2028-04-01', amendment_law_id: 'B' })],
+      excludedCount: 0,
+    }, '某法');
+    expect(w[0].message).toContain('未施行の改正が 2 件予定されています');
   });
 
   it('廃止予定を改正と分けて数える', () => {
