@@ -50,6 +50,9 @@ export const pendingAmendmentSchema = z.object({
   version_pinned_url: z.string().optional(),
   enforcement_note: z.string().optional(),
   repeal_status: z.string().optional(),
+  amendment_law_id: z.string().optional().describe('改正法の ID（版の ID の末尾 15 文字）。同じ値の版は同じ改正法による段階施行。一部改正法の本文は e-Gov API に無いので、改正の附則は get_article の supplementary（amendment_law_num）で読む'),
+  phase: z.number().optional().describe('段階施行のときだけ: 同じ改正法の未施行の版のうち、施行予定日の早い順で何期目か'),
+  phase_count: z.number().optional().describe('段階施行のときだけ: 同じ改正法の未施行の版の数'),
 });
 
 export type ToolStatus = z.infer<typeof toolStatusSchema>;
