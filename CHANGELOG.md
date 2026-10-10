@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-10
+
+### Added
+
+- `get_article`・`get_evidence_bundle`・`list_suppl_provisions` の `law_id` に、版の ID（`law_revision_id`。例 `322AC0000000049_20281223_508AC0000000046`）を渡せるようにした。過去の版・未施行の版の条文や附則を読める。`pending_amendments[].law_revision_id` をそのまま使える
+- 版の ID で指定したときは `law_revision_id` を返し（`get_evidence_bundle` は `primary_evidence.article_locator.law_revision_id`）、`canonical_id`・`source_url`・`version_info`（「この版の施行日／施行予定日」）もその版のものにする。law_id で指定したときの出力は変わらない
+- LLM 向けの `instructions` に、過去の版・未施行の版の条文は `law_id` に版の ID を渡して取得するよう追記
+
+### Changed
+
+- 附則が見つからないときの案内に、未施行の改正の附則はその改正の版の ID を `law_id` に渡すよう書き足した
+
 ## [0.13.0] - 2026-10-10
 
 ### Added
