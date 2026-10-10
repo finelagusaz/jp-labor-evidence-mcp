@@ -24,7 +24,7 @@
 - **未施行改正の検知/warning**。`amendment_scheduled_enforcement_date` は「今返っている版を生んだ改正の暫定施行日」であって将来の未施行改正への前方参照では**ない**（§3 の一次証拠）。真の未施行改正検知は別エンドポイント `GET /api/2/law_revisions/{law_id}` で全版を列挙し `current_revision_status == "UnEnforced"` を探す必要があり、追加リクエスト・キャッシュ・エラー処理を伴う。v1 では出さない。
 - **和暦併記**（施行日）。era 変換 util を要するため v1 は ISO 固定。→ **0.11.0 で解決**（[2026-10-08-wareki-dates-design.md](2026-10-08-wareki-dates-design.md)）。改正法番号は API が既に和暦（例「令和八年法律第四十六号」）で返すため情報は保全される。
 - `diff_revision`・deprecated `get_law` への version_info 強化の波及（§6.5）。→ `diff_revision` は 0.13.0 で解決（[2026-10-08-diff-revision-versions-design.md](2026-10-08-diff-revision-versions-design.md)）。`get_law` は deprecated のまま対象外
-- 廃止法令のフル UX（廃止日・後継法・時点法令の本文取得など）。
+- 廃止法令のフル UX（廃止日・後継法・時点法令の本文取得など）。→ **0.16.0 で解決**（[2026-10-10-repealed-law-ux-design.md](2026-10-10-repealed-law-ux-design.md)）。後継法は API が持たないので「廃止した法令」として示す。時点の本文は 0.14.0 の版の指定
 - 条文本文の bundled 化。
 
 ## 3. 一次証拠（2026-07-13 に live probe＋公式 OpenAPI で確認）
@@ -135,9 +135,9 @@ repeal_status が {undefined, 'None'} 以外                        （Repeal / 
 
 | 判定 | 文言 |
 |---|---|
-| `repeal_status=Repeal` or `current_revision_status=Repeal` | この法令は廃止されています{（廃止日: repeal_date）}。現に効力を有しません。現行の法令を確認してください。 |
+| `repeal_status=Repeal` or `current_revision_status=Repeal` | この法令は廃止されています。{廃止日は repeal_date です。}{廃止した法令は「amendment_law_title」（amendment_law_num）です。}現に効力を有しません。現行の法令を確認してください（resolve_law で題名から探せます）。（0.16.0。失効・効力の喪失でも current_revision_status は Repeal なので、この行は下の 3 行の後に評価する） |
 | `repeal_status=Expire` | この法令は期間満了により失効しています{（失効日: repeal_date）}。現に効力を有しません。 |
-| `repeal_status=LossOfEffectiveness` | この法令は効力を喪失しています。現に効力を有しません。 |
+| `repeal_status=LossOfEffectiveness` | この法令は効力を喪失しています。{効力を失った日は repeal_date です。}現に効力を有しません。 |
 | `repeal_status=Suspend` | この法令は効力が停止されています。適用の可否を確認してください。 |
 | `current_revision_status=UnEnforced` | この版はまだ施行されていません（未施行）。現在の施行版とは内容が異なる可能性があります。 |
 | `current_revision_status=PreviousEnforced` | この版は過去の施行版であり、現行版ではありません。より新しい施行版が存在します。 |
