@@ -11,11 +11,15 @@ export interface EgovLawSearchResult {
     law_title: string;
     law_title_kana?: string;
     abbrev?: string;
+    repeal_status?: string | null;
+    repeal_date?: string | null;
   };
   current_revision_info?: {
     law_title: string;
     law_title_kana?: string;
     abbrev?: string;
+    repeal_status?: string | null;
+    repeal_date?: string | null;
   };
 }
 
@@ -48,6 +52,11 @@ export interface RevisionMetadata {
   amendment_law_title?: string;
   current_revision_status?: string;
   repeal_status?: string;
+  /** 廃止・失効の日（repeal_date） */
+  repeal_date?: string;
+  repeal_date_wareki?: string;
+  /** 改正法の ID（amendment_law_id）。廃止された法令では、廃止した法令の ID */
+  amendment_law_id?: string;
   version_pinned_url?: string;
   latest_enforced_verified?: true;
 }

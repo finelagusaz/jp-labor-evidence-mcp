@@ -5,6 +5,7 @@ import { getIndexWarningsForTool, toWireWarnings } from '../lib/indexes/freshnes
 import type { CitationBasis } from '../lib/indexes/types.js';
 import { searchLaw } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope } from '../lib/tool-contract.js';
+import { toWarekiDate, withWareki } from '../lib/wareki.js';
 
 const searchLawInputSchema = z.object({
   keyword: z.string().min(1).max(100).describe(
@@ -33,6 +34,9 @@ const searchLawOutputSchema = createToolEnvelopeSchema(
       law_num: z.string(),
       law_type: z.string(),
       source_url: z.string(),
+      repeal_status: z.string().optional().describe('廃止・失効した法令のときだけ（Repeal / Expire / LossOfEffectiveness など）。e-Gov 検索で補完した候補にだけ付く'),
+      repeal_date: z.string().optional(),
+      repeal_date_wareki: z.string().optional(),
       freshness_status: z.enum(['fresh', 'stale', 'unknown']),
       citation_basis: z.enum(['index', 'upstream']),
       indexed_at: z.string().optional(),
@@ -91,6 +95,9 @@ export function registerSearchLawTool(server: McpServer) {
               law_num: r.lawNum,
               law_type: r.lawType,
               source_url: r.egovUrl,
+              repeal_status: r.repealStatus,
+              repeal_date: r.repealDate,
+              repeal_date_wareki: r.repealDate && toWarekiDate(r.repealDate),
               freshness_status: result.indexMeta?.freshness ?? 'unknown',
               citation_basis: candidateBasis,
               indexed_at: candidateBasis === 'index' ? result.indexMeta?.generated_at : undefined,
@@ -121,7 +128,7 @@ export function registerSearchLawTool(server: McpServer) {
         }
 
         const lines = result.results.map((r, i) =>
-          `${i + 1}. **${r.lawTitle}**\n   法令番号: ${r.lawNum}\n   law_id: ${r.lawId}\n   種別: ${r.lawType}\n   URL: ${r.egovUrl}`
+          `${i + 1}. **${r.lawTitle}**${repealNote(r.repealStatus, r.repealDate)}\n   法令番号: ${r.lawNum}\n   law_id: ${r.lawId}\n   種別: ${r.lawType}\n   URL: ${r.egovUrl}`
         );
 
         return createToolResult(
@@ -141,4 +148,12 @@ export function registerSearchLawTool(server: McpServer) {
       }
     }
   );
+}
+
+/** 廃止・失効した法令の見出しに添える注記（「（廃止: 2026-10-01（令和8年10月1日））」） */
+export function repealNote(repealStatus: string | undefined, repealDate: string | undefined): string {
+  if (!repealStatus) return '';
+  const labels: Record<string, string> = { Repeal: '廃止', Expire: '失効', LossOfEffectiveness: '効力喪失', Suspend: '効力停止' };
+  const label = labels[repealStatus] ?? repealStatus;
+  return `（${label}${repealDate ? `: ${withWareki(repealDate)}` : ''}）`;
 }

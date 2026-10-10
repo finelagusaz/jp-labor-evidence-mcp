@@ -38,8 +38,11 @@ export function buildVersionPinnedUrl(lawRevisionId: string | null | undefined):
 /**
  * revision_info を Evidence 用の機械可読メタへ正規化する。
  * API 名 → 出力名の写像はここに固定（mis-map 防止）:
- *   current_enforcement_date ← amendment_enforcement_date
- *   enforcement_note         ← amendment_enforcement_comment
+ *   current_enforcement_date   ← amendment_enforcement_date
+ *   scheduled_enforcement_date ← amendment_scheduled_enforcement_date（UnEnforced のときだけ）
+ *   enforcement_note           ← amendment_enforcement_comment
+ *   repeal_date                ← repeal_date
+ *   amendment_law_id           ← amendment_law_id
  * version_pinned_url は law_revision_id から導出。全フィールド欠落なら undefined。
  * latest_enforced_verified は照合済み（options.latestEnforcedVerified）のときだけ true、それ以外は省く。
  * 純粋関数（引数を mutate しない）。
@@ -52,6 +55,7 @@ export function buildRevisionMetadata(
   const lawRevisionId = cleanValue(revisionInfo.law_revision_id);
   const enforcementDate = cleanValue(revisionInfo.amendment_enforcement_date);
   const scheduledDate = scheduledEnforcementDateOf(revisionInfo);
+  const repealDate = cleanValue(revisionInfo.repeal_date);
   const metadata: RevisionMetadata = {
     law_revision_id: lawRevisionId,
     current_enforcement_date: enforcementDate,
@@ -63,6 +67,9 @@ export function buildRevisionMetadata(
     amendment_law_title: cleanValue(revisionInfo.amendment_law_title),
     current_revision_status: cleanValue(revisionInfo.current_revision_status),
     repeal_status: cleanValue(revisionInfo.repeal_status),
+    repeal_date: repealDate,
+    repeal_date_wareki: repealDate && toWarekiDate(repealDate),
+    amendment_law_id: cleanValue(revisionInfo.amendment_law_id),
     version_pinned_url: buildVersionPinnedUrl(revisionInfo.law_revision_id),
     latest_enforced_verified: options.latestEnforcedVerified === true ? true : undefined,
   };
@@ -81,6 +88,25 @@ function scheduledEnforcementDateOf(revisionInfo: EgovRevisionInfo | undefined):
 }
 
 /**
+ * 廃止・失効した法令の終わり方。施行日の代わりにこの日を version_info に書く。
+ * 判定は getRevisionWarnings と同じ複合トリガ（current_revision_status 単独では廃止を取りこぼす）。
+ * 未施行の版（廃止予定を含む）は対象外で、従来どおり施行予定日として書く。日付は repeal_date、無ければ施行日の項目
+ */
+function repealEndOf(revisionInfo: EgovRevisionInfo | undefined):
+  | { dateLabel: string; point: string; date?: string }
+  | undefined {
+  const status = cleanValue(revisionInfo?.current_revision_status);
+  if (status === 'UnEnforced') return undefined;
+  const repeal = cleanValue(revisionInfo?.repeal_status);
+  const ended = repeal === 'Repeal' || repeal === 'Expire' || repeal === 'LossOfEffectiveness' || status === 'Repeal';
+  if (!ended) return undefined;
+  const date = cleanValue(revisionInfo?.repeal_date) ?? cleanValue(revisionInfo?.amendment_enforcement_date);
+  if (repeal === 'Expire') return { dateLabel: '失効日', point: '失効時点', date };
+  if (repeal === 'LossOfEffectiveness') return { dateLabel: '効力を失った日', point: '効力を失った時点', date };
+  return { dateLabel: '廃止日', point: '廃止時点', date };
+}
+
+/**
  * 人間可読 version_info を組む。既存 base（法令番号 / 公布日）を変えず、
  * 施行日セグメント＋誤帰属 hedge を append する。改正法名は載せない。
  * revision または施行日が無ければ base のみへ graceful degrade。純粋関数。
@@ -95,6 +121,12 @@ export function buildVersionInfoString(
 ): string | undefined {
   const promulgation = cleanValue(promulgationDate);
   const base = joinVersionInfo([lawNum, promulgation && withWareki(promulgation)]);
+  // 廃止・失効した法令の本文は終わった時点のもの。「現行版の施行日」は誤りなので終わった日を書く
+  const end = repealEndOf(revisionInfo);
+  if (end) {
+    const datePart = end.date ? `${end.dateLabel} ${withWareki(end.date)}　` : '';
+    return joinVersionInfo([base, `${datePart}※本文は${end.point}の条文で、現に効力を有しません`]);
+  }
   const enforcementDate = cleanValue(revisionInfo?.amendment_enforcement_date);
   const scheduledDate = options.pinned ? scheduledEnforcementDateOf(revisionInfo) : undefined;
   const date = enforcementDate ?? scheduledDate;
@@ -136,14 +168,19 @@ export function getRevisionWarnings(
 
   const repealDate = cleanValue(revisionInfo.repeal_date);
   let body: string;
-  if (repeal === 'Repeal' || status === 'Repeal') {
-    body = `この法令は廃止されています。${repealDate ? `廃止日は ${withWareki(repealDate)}です。` : ''}現に効力を有しません。現行の法令を確認してください。`;
-  } else if (repeal === 'Expire') {
+  // 失効・効力の喪失・停止の法令も current_revision_status は Repeal になるので、repeal_status を先に見る
+  if (repeal === 'Expire') {
     body = `この法令は期間満了により失効しています。${repealDate ? `失効日は ${withWareki(repealDate)}です。` : ''}現に効力を有しません。`;
   } else if (repeal === 'LossOfEffectiveness') {
-    body = 'この法令は効力を喪失しています。現に効力を有しません。';
+    body = `この法令は効力を喪失しています。${repealDate ? `効力を失った日は ${withWareki(repealDate)}です。` : ''}現に効力を有しません。`;
   } else if (repeal === 'Suspend') {
     body = 'この法令は効力が停止されています。適用の可否を確認してください。';
+  } else if (repeal === 'Repeal' || status === 'Repeal') {
+    // 廃止した法令は同じ題名の新法のことも、一部改正法のこともある。後継とは言わず、本文が取れるとも言わない
+    const byTitle = cleanValue(revisionInfo.amendment_law_title);
+    const byNum = cleanValue(revisionInfo.amendment_law_num);
+    const repealedBy = byTitle ? `廃止した法令は「${byTitle}」${byNum ? `（${byNum}）` : ''}です。` : '';
+    body = `この法令は廃止されています。${repealDate ? `廃止日は ${withWareki(repealDate)}です。` : ''}${repealedBy}現に効力を有しません。現行の法令を確認してください（resolve_law で題名から探せます）。`;
   } else if (status === 'UnEnforced') {
     body = 'この版はまだ施行されていません（未施行）。現在の施行版とは内容が異なる可能性があります。';
   } else if (status === 'PreviousEnforced') {

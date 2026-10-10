@@ -211,3 +211,72 @@ describe('law-service revisionInfo populate', () => {
     expect(result.revisionInfo?.current_revision_status).toBe('CurrentEnforced');
   });
 });
+
+describe('廃止された法令', () => {
+  const repealed: EgovRevisionInfo = {
+    law_revision_id: '323AC0000000121_20261001_507AC0000000070',
+    amendment_enforcement_date: '2026-10-01',
+    amendment_law_id: '507AC0000000070',
+    amendment_law_num: '令和七年法律第七十号',
+    amendment_law_title: '日本学術会議法',
+    current_revision_status: 'Repeal',
+    repeal_status: 'Repeal',
+    repeal_date: '2026-10-01',
+  };
+
+  it('version_info は「現行版の施行日」ではなく廃止日と、本文が廃止時点のものであることを書く', () => {
+    const info = buildVersionInfoString('昭和二十三年法律第百二十一号', '1948-07-10', repealed)!;
+    expect(info).toContain('廃止日 2026-10-01（令和8年10月1日）');
+    expect(info).toContain('本文は廃止時点の条文で、現に効力を有しません');
+    expect(info).not.toContain('現行版');
+    // 版を指定しても同じ
+    expect(buildVersionInfoString(undefined, undefined, repealed, { pinned: true })).not.toContain('この版の施行日');
+  });
+
+  it('失効・効力の喪失はそれぞれの語で書く。repeal_date が無ければ施行日の項目を使う', () => {
+    const expire = buildVersionInfoString(undefined, undefined, { ...repealed, repeal_status: 'Expire', repeal_date: null })!;
+    expect(expire).toContain('失効日 2026-10-01');
+    expect(expire).toContain('本文は失効時点の条文で');
+    const loss = buildVersionInfoString(undefined, undefined, { ...repealed, repeal_status: 'LossOfEffectiveness' })!;
+    expect(loss).toContain('効力を失った日 2026-10-01');
+  });
+
+  it('current_revision_status だけが Repeal でも廃止として書く', () => {
+    expect(buildVersionInfoString(undefined, undefined, { ...repealed, repeal_status: 'None' })).toContain('廃止日 2026-10-01');
+  });
+
+  it('未施行の廃止予定の版は、廃止日ではなく施行予定日として書く', () => {
+    const info = buildVersionInfoString(undefined, undefined, {
+      ...repealed, current_revision_status: 'UnEnforced', amendment_enforcement_date: '2028-04-01', repeal_date: '2028-04-01',
+    }, { pinned: true });
+    expect(info).toContain('この版の施行予定日 2028-04-01');
+    expect(info).not.toContain('廃止日');
+  });
+
+  it('revision_metadata に廃止日（＋和暦）と改正法の ID を載せる', () => {
+    expect(buildRevisionMetadata(repealed)).toMatchObject({
+      repeal_date: '2026-10-01',
+      repeal_date_wareki: '令和8年10月1日',
+      amendment_law_id: '507AC0000000070',
+    });
+    expect(buildRevisionMetadata({ ...repealed, repeal_status: 'None', repeal_date: null, current_revision_status: 'CurrentEnforced' })?.repeal_date).toBeUndefined();
+  });
+
+  it('失効・効力の喪失の法令は current_revision_status が Repeal でも、それぞれの文で警告する', () => {
+    // e-Gov は失効・効力の喪失の法令でも current_revision_status を Repeal にする（官吏服務紀律など）
+    const [expire] = getRevisionWarnings({ ...repealed, repeal_status: 'Expire', repeal_date: '1948-01-01' }, '官吏服務紀律');
+    expect(expire.message).toBe('官吏服務紀律: この法令は期間満了により失効しています。失効日は 1948-01-01（昭和23年1月1日）です。現に効力を有しません。');
+    const [loss] = getRevisionWarnings({ ...repealed, repeal_status: 'LossOfEffectiveness', repeal_date: '2021-11-22' }, '某法');
+    expect(loss.message).toBe('某法: この法令は効力を喪失しています。効力を失った日は 2021-11-22（令和3年11月22日）です。現に効力を有しません。');
+  });
+
+  it('警告に廃止した法令の題名と法令番号を書き、後継とは言わない', () => {
+    const [w] = getRevisionWarnings(repealed, '日本学術会議法');
+    expect(w.code).toBe('LAW_NOT_CURRENTLY_ENFORCED');
+    expect(w.message).toContain('廃止した法令は「日本学術会議法」（令和七年法律第七十号）です。');
+    expect(w.message).toContain('resolve_law');
+    expect(w.message).not.toContain('後継');
+    // 題名が無ければ書かない
+    expect(getRevisionWarnings({ ...repealed, amendment_law_title: null }, '某法')[0].message).not.toContain('廃止した法令は');
+  });
+});
