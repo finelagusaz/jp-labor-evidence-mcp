@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-10
+
+### Added
+
+- `resolve_law` / `search_law` が e-Gov 検索で補完した候補に、廃止・失効していれば `repeal_status`・`repeal_date`（＋和暦）を付ける。text の見出しにも「（廃止: 日付）」を添える
+- `resolve_law` は、同じ題名の現行の法令が 1 つと廃止された法令があれば（日本学術会議法など）、現行の法令に解決する。廃止された候補は後ろに残し、`REPEALED_LAW_CANDIDATE` で知らせる
+- `search_law` の結果に廃止・失効した法令があれば `REPEALED_LAW_IN_RESULTS` で知らせる
+- `revision_metadata.repeal_date`（＋和暦）と `amendment_law_id`（廃止された法令では廃止した法令の ID）
+- 廃止の警告に、廃止した法令の題名と法令番号を添える（後継の法令とは限らないので、そうは呼ばない）
+- LLM 向けの `instructions` に、`repeal_status` のある候補は廃止・失効した法令だと追記
+
+### Changed
+
+- 廃止・失効した法令の `version_info` は「現行版の施行日」ではなく「廃止日／失効日／効力を失った日」を書き、本文が廃止時点の条文で現に効力を有しないことを添える
+
+### Fixed
+
+- 失効・効力の喪失の法令に「この法令は廃止されています」と警告していた。e-Gov はこれらの法令でも `current_revision_status` を `Repeal` にするため。`repeal_status` を先に見て、それぞれの文（失効日・効力を失った日つき）で警告する
+
 ## [0.15.0] - 2026-10-10
 
 ### Added
