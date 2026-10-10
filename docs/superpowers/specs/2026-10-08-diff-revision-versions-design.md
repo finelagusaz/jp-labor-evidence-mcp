@@ -28,7 +28,7 @@
 | 警告 | `LAW_NOT_CURRENTLY_ENFORCED` の文の前に「比較元: 」「比較先: 」を付ける | 両側とも同じ法令名で始まり、どちらの側か分からない |
 | canonical_id | 版の ID で指定した側は版の ID で識別する（`egov:{law_revision_id}:article:58`）。`law_revision_id` フィールドも足す | 同じ law_id・同じ条で本文の違う 2 件が同じ id にならないように |
 | source_url | 版の ID で指定した側は e-Gov の版のページ | 引用元をその版にする |
-| 対象外 | `get_article`・`get_evidence_bundle` など他の tool での版の指定 | 入力は従来どおり 20 文字。service 層は版の ID を受けられるようになったので、広げるのは低コスト |
+| 対象外 | `get_article`・`get_evidence_bundle` など他の tool での版の指定 | 0.14.0 で対応（[2026-10-10-version-ids-in-tools-design.md](2026-10-10-version-ids-in-tools-design.md)） |
 
 ## 4. 検証
 

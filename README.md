@@ -184,6 +184,14 @@ freshness 警告は通常 tool response の `warnings[]` と起動時ログで r
 > [!WARNING]
 > `diff_revision` は **同一法令の同一条番号** だけを比較対象とします。異なる法令同士の比較は受け付けません。
 
+### 過去の版・未施行の版の条文
+
+> 労働基準法第58条の、2028年12月23日施行予定の版の条文を見せて
+
+1. `get_article(law_id="322AC0000000049_20281223_508AC0000000046", article="58")`
+
+`get_article`・`get_evidence_bundle`・`list_suppl_provisions` の `law_id` には、版の ID も渡せます。返る `law_revision_id`・`canonical_id`・`source_url`・`version_info` はその版のものです。未施行の改正の附則（施行期日・経過措置）を、その改正の版から読むこともできます。
+
 ### 厚労省通達検索
 
 > 36協定に関する通達を検索して
@@ -284,7 +292,7 @@ npm run sync:indexes:incremental
 - `coverage_below_threshold` のときは fallback を抑止することがある
 - `stale_but_usable` は stale index を使っているので、上位クライアント側で注意表示した方がよい
 - 内蔵法令／通達インデックスが古い場合、tool response の `warnings[]` と起動時ログに freshness 警告が出る。意図的に古い bundle を使う場合（過去事案の再現調査、バージョン固定の回帰環境、オフライン長期運用など）は `LABOR_LAW_MCP_SUPPRESS_FRESHNESS_WARNINGS=1` で抑止できる
-- `diff_revision` で比べられる版は e-Gov の法令履歴（`/law_revisions`）にあるものに限られる（多くの法令で 2016 年ごろ以降）
+- `diff_revision` で比べられる版、`get_article` などで指定できる版は e-Gov の法令履歴（`/law_revisions`）にあるものに限られる（多くの法令で 2016 年ごろ以降）
 - 判例・裁判例は対象外
 
 ## 出典
