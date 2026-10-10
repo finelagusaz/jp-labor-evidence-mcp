@@ -26,6 +26,8 @@ export interface EvidenceRecord {
   common_caption?: { caption: string; from_article: string };
   article_locator?: {
     law_id: string;
+    /** 版の ID で指定したときだけ */
+    law_revision_id?: string;
     /** 附則の key（附則のときだけ） */
     supplementary?: string;
     article?: string;
@@ -93,23 +95,26 @@ export async function getEvidenceBundle(params: {
   const primaryBody = formatArticleBody(primary);
   const primaryEvidence: EvidenceRecord = {
     source_type: 'egov',
-    canonical_id: buildArticleCanonicalId(primary.lawId, locator),
+    canonical_id: buildArticleCanonicalId(primary.lawRevisionId ?? primary.lawId, locator),
     title: primaryTitle,
     body: primaryBody,
     source_url: primary.egovUrl,
     retrieved_at: retrievedAt,
     warnings: [],
-    version_info: buildVersionInfoString(primary.lawNum, primary.promulgationDate, primary.revisionInfo),
+    version_info: buildVersionInfoString(primary.lawNum, primary.promulgationDate, primary.revisionInfo, {
+      pinned: primary.lawRevisionId !== undefined,
+    }),
     revision_metadata: buildRevisionMetadata(primary.revisionInfo, {
       latestEnforcedVerified: primaryLatestEnforcedVerified,
     }),
-    upstream_hash: computeUpstreamHash([primary.lawId, primaryTitle, primaryBody, primary.egovUrl]),
+    upstream_hash: computeUpstreamHash([primary.lawRevisionId ?? primary.lawId, primaryTitle, primaryBody, primary.egovUrl]),
     common_caption: primary.commonCaption && {
       caption: primary.commonCaption.caption,
       from_article: primary.commonCaption.fromArticle,
     },
     article_locator: {
       law_id: primary.lawId,
+      law_revision_id: primary.lawRevisionId,
       supplementary: primary.supplementary?.key,
       article: params.article,
       paragraph: primary.paragraph,

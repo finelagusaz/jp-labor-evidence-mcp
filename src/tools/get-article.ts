@@ -11,15 +11,17 @@ import { failureReasonOf } from '../lib/errors.js';
 import type { PendingAmendment } from '../lib/types.js';
 
 const getArticleInputSchema = z.object({
-  law_id: z.string().min(1).max(20).describe(
-    'resolve_law または search_law で確定した e-Gov law_id。例: "322AC0000000049"'
+  law_id: z.string().min(1).max(60).describe(
+    'resolve_law または search_law で確定した e-Gov law_id（現行版）。例: "322AC0000000049"。' +
+    '過去の版や未施行の版を読むときは版の ID（law_revision_id）を渡す。例: "322AC0000000049_20281223_508AC0000000046"（pending_amendments[].law_revision_id をそのまま渡せる）'
   ),
   article: z.string().min(1).max(20).optional().describe(
     '条文番号。例: "32", "36", "32の2", "第36条", "第32条の2"。supplementary を指定したときは省略でき、省くと附則の直下（条を持たない附則の項）を対象にする'
   ),
   supplementary: z.string().min(1).max(60).optional().describe(
     '附則を対象にする。"制定" で制定時附則、改正附則は改正法の法令番号で指定する（例: "令和8年法律第46号"、"令和八年法律第四十六号"）。' +
-    'revision_metadata.amendment_law_num や pending_amendments[].amendment_law_num をそのまま渡せる（未施行の改正の附則は現行版にまだ無いことがある）。一覧は list_suppl_provisions'
+    'revision_metadata.amendment_law_num や pending_amendments[].amendment_law_num をそのまま渡せる。' +
+    '未施行の改正の附則は現行版にまだ無いことがあり、そのときは law_id にその改正の版の ID（pending_amendments[].law_revision_id）を渡す。一覧は list_suppl_provisions'
   ),
   paragraph: z.number().int().positive().max(99).optional().describe(
     '項番号（省略時は条文全体）。例: 1, 2'
@@ -41,6 +43,7 @@ const getArticleOutputSchema = createToolEnvelopeSchema(
     source_type: z.literal('egov'),
     canonical_id: z.string(),
     law_id: z.string(),
+    law_revision_id: z.string().optional().describe('版の ID で指定したときだけ。本文・version_info・canonical_id はこの版のもの'),
     law_title: z.string(),
     article: z.string().optional(),
     paragraph: z.number().optional(),
@@ -73,7 +76,8 @@ export function registerGetArticleTool(server: McpServer) {
   server.registerTool(
     'get_article',
     {
-      description: '確定済み law_id に対して、特定条文を厳密に取得する。resolve_law の後段で使用する。附則は supplementary で指定する（経過措置・施行期日の確認）。未施行の改正確認は既定で行わない（include_pending_amendments: true 指定時のみ）。',
+      description: '確定済み law_id に対して、特定条文を厳密に取得する。resolve_law の後段で使用する。附則は supplementary で指定する（経過措置・施行期日の確認）。未施行の改正確認は既定で行わない（include_pending_amendments: true 指定時のみ）。' +
+        'law_id に版の ID を渡すと、過去の版・未施行の版の条文を取得する。',
       inputSchema: getArticleInputSchema,
       outputSchema: getArticleOutputSchema,
     },
@@ -98,7 +102,8 @@ export function registerGetArticleTool(server: McpServer) {
         };
         const title = buildArticleTitle(result.lawTitle, locator);
         const body = formatArticleBody(result);
-        const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo);
+        const pinned = result.lawRevisionId !== undefined;
+        const versionInfo = buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo, { pinned });
         const freshnessWarnings = toWireWarnings(getIndexWarningsForTool(['egov']));
         const latestEnforcedVerified = await verifyLatestEnforced(result.lawId, result.revisionInfo);
         const revisionMetadata = buildRevisionMetadata(result.revisionInfo, { latestEnforcedVerified });
@@ -136,8 +141,10 @@ export function registerGetArticleTool(server: McpServer) {
           partial_failures: partialFailures,
           data: {
             source_type: 'egov' as const,
-            canonical_id: buildArticleCanonicalId(result.lawId, locator),
+            // 版を指定したときは、同じ条の別の版と区別できるよう版の ID で識別する（diff_revision と同じ）
+            canonical_id: buildArticleCanonicalId(result.lawRevisionId ?? result.lawId, locator),
             law_id: result.lawId,
+            law_revision_id: result.lawRevisionId,
             law_title: result.lawTitle,
             article: args.article,
             paragraph: result.paragraph,
@@ -159,7 +166,7 @@ export function registerGetArticleTool(server: McpServer) {
             version_info: versionInfo,
             revision_metadata: revisionMetadata,
             pending_amendments: pendingAmendments,
-            upstream_hash: computeUpstreamHash([result.lawId, title, body, result.egovUrl]),
+            upstream_hash: computeUpstreamHash([result.lawRevisionId ?? result.lawId, title, body, result.egovUrl]),
           },
         };
 

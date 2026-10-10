@@ -15,7 +15,7 @@ import { registerGetJaishTsutatsuTool } from './tools/get-jaish-tsutatsu.js';
 import { registerPrompts } from './prompts/index.js';
 import { registerStatusResource } from './resources/status.js';
 
-const SERVER_VERSION = '0.13.0';
+const SERVER_VERSION = '0.14.0';
 
 export function createServer(): McpServer {
   const server = new McpServer(
@@ -36,6 +36,7 @@ export function createServer(): McpServer {
 - 法令本文の取得は resolve_law で law_id を確定し、その後 get_article を使うこと
 - 附則（経過措置・施行期日）は get_article の supplementary で指定すること。値は list_suppl_provisions の key か、revision_metadata.amendment_law_num / pending_amendments[].amendment_law_num をそのまま渡せる（未施行の改正の附則は現行版にまだ収録されていないことがある）
 - 改正前後の条文の比較は diff_revision に版の ID（revision_metadata.law_revision_id / pending_amendments[].law_revision_id）を渡すこと。未施行の改正の版を渡せば、施行後にどう変わるかを比べられる
+- 過去の版・未施行の版の条文そのものは、get_article（get_evidence_bundle・list_suppl_provisions も同じ）の law_id に版の ID を渡して取得する。返る version_info・canonical_id はその版のもの
 - 施行日を和暦で示すときは revision_metadata.current_enforcement_date_wareki / pending_amendments[].enforcement_date_wareki の値を使い、ISO の日付から自分で換算しないこと（元号は改元の日で切り替わる）
 - ツール呼び出しが失敗した場合は、失敗を明示し、別ツールまたは別条件で再試行すること
 - 失敗の応答の retryable が true なら、時間をおいて同じ条件で再試行してよい（上流の一時的な障害）。false なら同じ条件で再試行せず、条件を変えること（not_found は指定を見直す）
