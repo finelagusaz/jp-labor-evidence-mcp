@@ -61,6 +61,8 @@ export interface SupplProvisionListItem {
 
 export interface ListSupplProvisionsResult {
   lawId: string;
+  /** 版の ID で指定したときだけ */
+  lawRevisionId?: string;
   lawTitle: string;
   lawNum: string;
   promulgationDate: string;
@@ -181,7 +183,8 @@ export async function getLawArticle(params: {
     if (!suppl) {
       throw new NotFoundError(
         `${lawTitle} に附則「${supplementary}」が見つかりませんでした。list_suppl_provisions で附則の一覧を確認してください。` +
-          '未施行の改正の附則は、現行版の本文にまだ収録されていないことがあります。',
+          '未施行の改正の附則は、現行版の本文にまだ収録されていないことがあります。' +
+          'その場合は law_id にその改正の版の ID（include_pending_amendments で得られる pending_amendments[].law_revision_id）を渡してください。',
       );
     }
   }
@@ -243,7 +246,7 @@ export async function listSupplProvisionsByLawId(params: {
     );
   }
 
-  const { data, lawId, lawTitle } = await fetchLawData(params.lawId);
+  const { data, lawId, lawTitle, lawRevisionId } = await fetchLawData(params.lawId);
   const all = listSupplProvisions(data);
   const filtered = filter ? all.filter((s) => s.parsed && lawNumMatches(filter, s.parsed)) : all;
   // 公布日の新しい順。公布日が無いもの（制定時附則など）は e-Gov の並び（古い順）の位置で補う
@@ -259,10 +262,11 @@ export async function listSupplProvisionsByLawId(params: {
 
   return {
     lawId,
+    lawRevisionId,
     lawTitle,
     lawNum: data.law_info.law_num,
     promulgationDate: data.law_info.promulgation_date,
-    egovUrl: getEgovUrl(lawId),
+    egovUrl: getEgovUrl(lawId, lawRevisionId),
     revisionInfo: data.revision_info,
     total: sorted.length,
     hasMore: offset + page.length < sorted.length,

@@ -5,8 +5,9 @@ import { getEvidenceBundle } from '../lib/services/evidence-bundle-service.js';
 import { createToolEnvelopeSchema, createToolResult, mapErrorToEnvelope, pendingAmendmentSchema, revisionMetadataSchema } from '../lib/tool-contract.js';
 
 const inputSchema = z.object({
-  law_id: z.string().min(1).max(20).describe(
-    '確定済みの e-Gov law_id。resolve_law または search_law の結果を指定。'
+  law_id: z.string().min(1).max(60).describe(
+    '確定済みの e-Gov law_id。resolve_law または search_law の結果を指定。' +
+    '過去の版・未施行の版の条文を主根拠にするときは版の ID（pending_amendments[].law_revision_id）を渡す。委任先の法令と関連通達は版を問わず現在のもの'
   ),
   article: z.string().min(1).max(20).optional().describe(
     '条文番号。例: "32", "36", "32の2", "第36条", "第32条の2"。supplementary を指定したときは省略できる'
@@ -57,6 +58,7 @@ const evidenceSchema = z.object({
   }).optional(),
   article_locator: z.object({
     law_id: z.string(),
+    law_revision_id: z.string().optional(),
     supplementary: z.string().optional(),
     article: z.string().optional(),
     paragraph: z.number().optional(),

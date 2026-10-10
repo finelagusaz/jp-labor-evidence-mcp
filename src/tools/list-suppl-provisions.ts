@@ -7,8 +7,9 @@ import { listSupplProvisionsByLawId } from '../lib/services/law-service.js';
 import { createToolEnvelopeSchema, createToolResult, isoNow, mapErrorToEnvelope, revisionMetadataSchema } from '../lib/tool-contract.js';
 
 const inputSchema = z.object({
-  law_id: z.string().min(1).max(20).describe(
-    'resolve_law で確定した e-Gov law_id。例: "322AC0000000049"'
+  law_id: z.string().min(1).max(60).describe(
+    'resolve_law で確定した e-Gov law_id（現行版）。例: "322AC0000000049"。' +
+    '未施行の改正の附則など、別の版の附則を見るときは版の ID（pending_amendments[].law_revision_id）を渡す'
   ),
   amendment_law_num: z.string().min(1).max(60).optional().describe(
     '改正法の法令番号で絞り込む。年だけでもよい。例: "令和8年"、"令和8年法律第46号"、"令和八年法律第四十六号"'
@@ -20,6 +21,7 @@ const inputSchema = z.object({
 const outputSchema = createToolEnvelopeSchema(
   z.object({
     law_id: z.string(),
+    law_revision_id: z.string().optional(),
     law_title: z.string(),
     source_url: z.string(),
     retrieved_at: z.string(),
@@ -61,7 +63,7 @@ export function registerListSupplProvisionsTool(server: McpServer) {
         });
         const items = result.items.map((item) => ({
           key: item.key,
-          canonical_id: buildEgovSupplCanonicalId(result.lawId, item.key),
+          canonical_id: buildEgovSupplCanonicalId(result.lawRevisionId ?? result.lawId, item.key),
           amend_law_num: item.amendLawNum,
           extract: item.extract,
           article_nums: item.articleNums,
@@ -76,10 +78,13 @@ export function registerListSupplProvisionsTool(server: McpServer) {
           partial_failures: [],
           data: {
             law_id: result.lawId,
+            law_revision_id: result.lawRevisionId,
             law_title: result.lawTitle,
             source_url: result.egovUrl,
             retrieved_at: isoNow(),
-            version_info: buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo),
+            version_info: buildVersionInfoString(result.lawNum, result.promulgationDate, result.revisionInfo, {
+              pinned: result.lawRevisionId !== undefined,
+            }),
             revision_metadata: buildRevisionMetadata(result.revisionInfo),
             total: result.total,
             has_more: result.hasMore,
